@@ -234,6 +234,15 @@ namespace Mappi
                 return (result1, result2, result3, result4, result5, result6, result7, result8);
             }
         }
+
+        public static T[] Query<T>(this SqlConnection connection, string sql, object parameter = null)
+            where T : new()
+        {
+            using (var reader = connection.Query(sql, parameter))
+            {
+                return reader.Read<T>().ToArray();
+            }
+        }
 #endif
 
 

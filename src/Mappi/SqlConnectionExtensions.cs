@@ -7,7 +7,13 @@ namespace Mappi
 {
     public static class SqlConnectionExtensions
     {
-        public static DataReader MultipleQuery(this SqlConnection connection, string sql, object parameter = null)
+        public static MultipleDataReader MultipleQuery(this SqlConnection connection, string sql, object parameter = null)
+            => new MultipleDataReader(connection.ExecuteReader(sql, parameter));
+
+        public static DataReader Query(this SqlConnection connection, string sql, object parameter = null)
+            => new DataReader(connection.ExecuteReader(sql, parameter));
+
+        private static SqlDataReader ExecuteReader(this SqlConnection connection, string sql, object parameter = null)
         {
             if (connection.State != ConnectionState.Open)
                 connection.Open();
@@ -22,8 +28,7 @@ namespace Mappi
                     command.Parameters.AddWithValue(key, value);
                 }
 
-                var reader = command.ExecuteReader();
-                return new DataReader(reader);
+                return command.ExecuteReader();
             }
         }
     }

@@ -12,8 +12,8 @@ Mappi は `System.Data.SqlClient.SqlConnection` の拡張メソッドとして�
 ```cs
 class Person
 {
-  public string Name { get; }
-  public int Age { get; }
+    public string Name { get; }
+    public int Age { get; }
 }
 ```
 
@@ -23,10 +23,10 @@ class Person
 ```cs
 class Person
 {
-  [Column(Name: "name")]
-  public string Name { get; }
-  [Column(Name: "age")]
-  public int Age { get; }
+    [Column(Name: "name")]
+    public string Name { get; }
+    [Column(Name: "age")]
+    public int Age { get; }
 }
 ```
 
@@ -36,13 +36,13 @@ class Person
 ```cs
 class Person
 {
-  [Column(Name: "name")]
-  public string Name { get; }
-  [Column(Name: "age")]
-  public int Age { get; }
+    [Column(Name: "name")]
+    public string Name { get; }
+    [Column(Name: "age")]
+    public int Age { get; }
 
-  [Ignore]
-  private Sex _sex;
+    [Ignore]
+    private Sex _sex;
 }
 ```
 
@@ -51,23 +51,23 @@ class Person
 ```cs
 class Person
 {
-  [Column(Name: "name")]
-  private string _name;
-  [Column(Name: "age")]
-  private int _age;
+    [Column(Name: "name")]
+    private string _name;
+    [Column(Name: "age")]
+    private int _age;
 
-  [Ignore]
-  public string Name 
-  { 
-    get => _name ?? "名無しの権兵衛"; 
-    set => _name = value;
-  }
-  [Ignore]
-  public int Age
-  { 
-    get => _age < 0 ? 0 : _age; 
-    set => _age = value;
-  }
+    [Ignore]
+    public string Name 
+    { 
+        get => _name ?? "名無しの権兵衛"; 
+        set => _name = value;
+    }
+    [Ignore]
+    public int Age
+    { 
+        get => _age < 0 ? 0 : _age; 
+        set => _age = value;
+    }
 }
 ```
 
@@ -76,10 +76,10 @@ class Person
 ```cs
 struct Person
 {
-  [Column(Name: "name")]
-  public readonly string Name;
-  [Column(Name: "age")]
-  public readonly int Age;
+    [Column(Name: "name")]
+    public readonly string Name;
+    [Column(Name: "age")]
+    public readonly int Age;
 }
 ```
 
@@ -94,20 +94,20 @@ using Mappi;
 
 static void Main(string[] args)
 {
-  var connectionString = "YOUR DB CONNECTION STRING";
+    var connectionString = "YOUR DB CONNECTION STRING";
 
-  var sql = @"
-    SELECT * FROM sample;
-  ";
+    var sql = @"
+      SELECT * FROM sample;
+    ";
 
-  using ( var connection = new SqlConnection(connectionString) )
-  using ( var reader = connection.MultipleQuery(sql) )
-  {
-    foreach ( var item in reader.Read<SAMPLE>() )
+    using ( var connection = new SqlConnection(connectionString) )
+    using ( var reader = connection.MultipleQuery(sql) )
     {
-      // do something
+        foreach ( var item in reader.Read<SAMPLE>() )
+        {
+          // do something
+        }
     }
-  }
 }
 ```
 
@@ -121,20 +121,20 @@ using Mappi;
 
 static void Main(string[] args)
 {
-  var connectionString = "YOUR DB CONNECTION STRING";
+    var connectionString = "YOUR DB CONNECTION STRING";
 
-  var sql = @"
-    SELECT * FROM sample WHERE number = @Number;
-  ";
+    var sql = @"
+      SELECT * FROM sample WHERE number = @Number;
+    ";
 
-  using ( var connection = new SqlConnection(connectionString) )
-  using ( var reader = connection.MultipleQuery(sql, new { Number = 100 }) )
-  {
-    foreach ( var item in reader.Read<SAMPLE>() )
+    using ( var connection = new SqlConnection(connectionString) )
+    using ( var reader = connection.MultipleQuery(sql, new { Number = 100 }) )
     {
-      // do something
+        foreach ( var item in reader.Read<SAMPLE>() )
+        {
+          // do something
+        }
     }
-  }
 }
 ```
 
@@ -149,26 +149,26 @@ using Mappi;
 
 static void Main(string[] args)
 {
-  var connectionString = "YOUR DB CONNECTION STRING";
+    var connectionString = "YOUR DB CONNECTION STRING";
 
-  var sql = @"
-    SELECT * FROM sample;
-    SELECT * FROM test;
-  ";
+    var sql = @"
+      SELECT * FROM sample;
+      SELECT * FROM test;
+    ";
 
-  using ( var connection = new SqlConnection(connectionString) )
-  using ( var reader = connection.MultipleQuery(sql) )
-  {
-    foreach ( var item in reader.Read<SAMPLE>() )
+    using ( var connection = new SqlConnection(connectionString) )
+    using ( var reader = connection.MultipleQuery(sql) )
     {
-      // do something
-    }
+        foreach ( var item in reader.Read<SAMPLE>() )
+        {
+            // do something
+        }
 
-    foreach ( var item in reader.Read<TEST>() )
-    {
-      // do something
+        foreach ( var item in reader.Read<TEST>() )
+        {
+            // do something
+        }
     }
-  }
 }
 ```
 
@@ -181,29 +181,29 @@ using Mappi;
 
 static void Main(string[] args)
 {
-  var connectionString = "YOUR DB CONNECTION STRING";
+    var connectionString = "YOUR DB CONNECTION STRING";
 
-  var sql = @"
-    SELECT * FROM sample;
-    SELECT * FROM test;
-  ";
+    var sql = @"
+      SELECT * FROM sample;
+      SELECT * FROM test;
+    ";
 
-  using ( var connection = new SqlConnection(connectionString) )
-  using ( var reader = connection.MultipleQuery(sql) )
-  {
-    foreach ( var item in reader.Read<SAMPLE>() )
+    using ( var connection = new SqlConnection(connectionString) )
+    using ( var reader = connection.MultipleQuery(sql) )
     {
-      // do something
-    }
+        foreach ( var item in reader.Read<SAMPLE>() )
+        {
+            // do something
+        }
 
-    if ( reader.HasNext )
-    {
-      foreach ( var item in reader.Read<TEST>() )
-      {
-        // do something
-      }
+        if ( reader.HasNext )
+        {
+            foreach ( var item in reader.Read<TEST>() )
+            {
+                // do something
+            }
+        }
     }
-  }
 }
 ```
 
@@ -217,25 +217,25 @@ using Mappi;
 
 static void Main(string[] args)
 {
-  var connectionString = "YOUR DB CONNECTION STRING";
+    var connectionString = "YOUR DB CONNECTION STRING";
 
-  var sql = @"
-    SELECT * FROM sample;
-    SELECT * FROM test WHERE name = @Name;
-  ";
+    var sql = @"
+      SELECT * FROM sample;
+      SELECT * FROM test WHERE name = @Name;
+    ";
 
-  using ( var connection = new SqlConnection(connectionString) )
-  using ( var reader = connection.MultipleQuery(sql, new { Name = "Midoliy" }) )
-  {
-    foreach ( var item in reader.Read<SAMPLE>() )
+    using ( var connection = new SqlConnection(connectionString) )
+    using ( var reader = connection.MultipleQuery(sql, new { Name = "Midoliy" }) )
     {
-      // do something
-    }
+        foreach ( var item in reader.Read<SAMPLE>() )
+        {
+            // do something
+        }
 
-    foreach ( var item in reader.Read<TEST>() )
-    {
-      // do something
+        foreach ( var item in reader.Read<TEST>() )
+        {
+            // do something
+        }
     }
-  }
 }
 ```

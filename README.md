@@ -101,7 +101,7 @@ static void Main(string[] args)
     ";
 
     using ( var connection = new SqlConnection(connectionString) )
-    using ( var reader = connection.MultipleQuery(sql) )
+    using ( var reader = connection.Query(sql) )
     {
         foreach ( var item in reader.Read<SAMPLE>() )
         {
@@ -110,6 +110,30 @@ static void Main(string[] args)
     }
 }
 ```
+
+.NET Framework 4.5 以降 / .NET Core 2.0 以降であれば、型パラメータを利用してマッピング後のオブジェクトを取得可能です。
+
+```cs
+using System;
+using System.Data.SqlClient;
+using Mappi;
+
+static void Main(string[] args)
+{
+    var connectionString = "YOUR DB CONNECTION STRING";
+
+    var sql = @"
+      SELECT * FROM sample;
+    ";
+
+    using ( var connection = new SqlConnection(connectionString) )
+    {
+        var samples = connection.Query<SAMPLE>(sql);
+        // do something
+    }
+}
+```
+
 
 また、SQL にパラメータを利用したい場合は以下のように渡すことができます。
 サンプルでは匿名クラスを利用していますが、通常のクラスや構造体でも問題ありません。
@@ -128,7 +152,7 @@ static void Main(string[] args)
     ";
 
     using ( var connection = new SqlConnection(connectionString) )
-    using ( var reader = connection.MultipleQuery(sql, new { Number = 100 }) )
+    using ( var reader = connection.Query(sql, new { Number = 100 }) )
     {
         foreach ( var item in reader.Read<SAMPLE>() )
         {
@@ -203,6 +227,30 @@ static void Main(string[] args)
                 // do something
             }
         }
+    }
+}
+```
+
+.NET Framework 4.5 以降 / .NET Core 2.0 以降であれば、型パラメータを利用してマッピング後のオブジェクトを取得可能です。
+
+```cs
+using System;
+using System.Data.SqlClient;
+using Mappi;
+
+static void Main(string[] args)
+{
+    var connectionString = "YOUR DB CONNECTION STRING";
+
+    var sql = @"
+      SELECT * FROM sample;
+      SELECT * FROM test;
+    ";
+
+    using ( var connection = new SqlConnection(connectionString) )
+    {
+        var (samples, tests) = connection.MultipleQuery<SAMPLE, TEST>(sql);
+        // do something
     }
 }
 ```

@@ -48,6 +48,7 @@ namespace Mappi
         {
             var type = typeof(T);
             var properties = type.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            var fields = type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
 
             while (_reader.Read())
             {
@@ -64,7 +65,7 @@ namespace Mappi
                         ? _reader[column.Name]
                         : _reader[property.Name];
 
-                    // プロパティのBackingFieldへ値を設定
+                    // プロパティのBackingFieldへセットする値を生成
                     var backingfield = property.Name.GetBackingField<T>();
                     if (backingfield == null)
                         continue;
@@ -73,6 +74,25 @@ namespace Mappi
                     // T型が構造体の場合、nullを突っ込もうとすると例外が発生するのでちゃんと値があるか見切る
                     if (type.IsClass || input != null)
                         backingfield.SetValueDirect(refinst, input);
+                }
+
+                foreach (var field in fields)
+                {
+                    // フィールドにIgnore属性が付与されている場合はマッピング対象外にする
+                    if (field.GetAttribute<IgnoreAttribute>() != null)
+                        continue;
+
+                    // rowから値を取得
+                    var value = (field.GetAttribute<ColumnAttribute>() is ColumnAttribute column)
+                        ? _reader[column.Name]
+                        : _reader[field.Name];
+
+                    // フィールドへセットする値を生成
+                    var input = Map(value, field);
+
+                    // T型が構造体の場合、nullを突っ込もうとすると例外が発生するのでちゃんと値があるか見切る
+                    if (type.IsClass || input != null)
+                        field.SetValueDirect(refinst, input);
                 }
 
                 yield return instance;

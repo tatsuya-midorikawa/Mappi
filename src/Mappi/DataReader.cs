@@ -78,8 +78,8 @@ namespace Mappi
 
                 foreach (var field in fields)
                 {
-                    // フィールドにIgnore属性が付与されている場合はマッピング対象外にする
-                    if (field.GetAttribute<IgnoreAttribute>() != null)
+                    // フィールドにIgnore属性が付与されている場合、またはBackingFieldの場合、マッピング対象外にする
+                    if (field.GetAttribute<IgnoreAttribute>() != null || field.Name.EndsWith("k__BackingField"))
                         continue;
 
                     // rowから値を取得

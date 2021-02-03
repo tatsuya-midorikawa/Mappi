@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using Reffy;
+using Microsoft.FSharp.Core;
 
 namespace Mappi
 {
@@ -46,7 +47,7 @@ namespace Mappi
             where T : new()
         {
             var type = typeof(T);
-            var properties = type.GetProperties();
+            var properties = type.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
 
             while (_reader.Read())
             {
@@ -65,12 +66,15 @@ namespace Mappi
 
                     // プロパティのBackingFieldへ値を設定
                     var backingfield = property.Name.GetBackingField<T>();
+                    if (backingfield == null)
+                        continue;
                     var input = Map(value, backingfield);
 
                     // T型が構造体の場合、nullを突っ込もうとすると例外が発生するのでちゃんと値があるか見切る
                     if (type.IsClass || input != null)
                         backingfield.SetValueDirect(refinst, input);
                 }
+
                 yield return instance;
             }
 
@@ -83,6 +87,7 @@ namespace Mappi
 
             // nullable values
             if (type == typeof(Guid?)
+                || type == typeof(sbyte?)
                 || type == typeof(byte?)
                 || type == typeof(char?)
                 || type == typeof(bool?)
@@ -103,6 +108,8 @@ namespace Mappi
             // non nullable values
             if (type == typeof(Guid))
                 return (value is DBNull) ? Guid.Empty : value;
+            if (type == typeof(sbyte))
+                return (value is DBNull) ? default(sbyte) : value;
             if (type == typeof(byte))
                 return (value is DBNull) ? default(byte) : value;
             if (type == typeof(char))
@@ -127,6 +134,36 @@ namespace Mappi
                 return (value is DBNull) ? default(DateTimeOffset) : value;
             if (type == typeof(TimeSpan))
                 return (value is DBNull) ? default(TimeSpan) : value;
+
+            // optional values
+            if (type == typeof(FSharpOption<Guid>))
+                return (value is DBNull) ? FSharpOption<Guid>.None : FSharpOption<Guid>.Some((Guid)value);
+            if (type == typeof(FSharpOption<sbyte>))
+                return (value is DBNull) ? FSharpOption<sbyte>.None : FSharpOption<sbyte>.Some(Convert.ToSByte(value));
+            if (type == typeof(FSharpOption<byte>))
+                return (value is DBNull) ? FSharpOption<byte>.None : FSharpOption<byte>.Some(Convert.ToByte(value));
+            if (type == typeof(FSharpOption<char>))
+                return (value is DBNull) ? FSharpOption<char>.None : FSharpOption<char>.Some(Convert.ToChar(value));
+            if (type == typeof(FSharpOption<bool>))
+                return (value is DBNull) ? FSharpOption<bool>.None : FSharpOption<bool>.Some(Convert.ToBoolean(value));
+            if (type == typeof(FSharpOption<short>))
+                return (value is DBNull) ? FSharpOption<short>.None : FSharpOption<short>.Some(Convert.ToInt16(value));
+            if (type == typeof(FSharpOption<int>))
+                return (value is DBNull) ? FSharpOption<int>.None : FSharpOption<int>.Some(Convert.ToInt32(value));
+            if (type == typeof(FSharpOption<long>))
+                return (value is DBNull) ? FSharpOption<long>.None : FSharpOption<long>.Some(Convert.ToInt64(value));
+            if (type == typeof(FSharpOption<float>))
+                return (value is DBNull) ? FSharpOption<float>.None : FSharpOption<float>.Some(Convert.ToSingle(value));
+            if (type == typeof(FSharpOption<double>))
+                return (value is DBNull) ? FSharpOption<double>.None : FSharpOption<double>.Some(Convert.ToDouble(value));
+            if (type == typeof(FSharpOption<decimal>))
+                return (value is DBNull) ? FSharpOption<decimal>.None : FSharpOption<decimal>.Some(Convert.ToDecimal(value));
+            if (type == typeof(FSharpOption<DateTime>))
+                return (value is DBNull) ? FSharpOption<DateTime>.None : FSharpOption<DateTime>.Some((DateTime)value);
+            if (type == typeof(FSharpOption<DateTimeOffset>))
+                return (value is DBNull) ? FSharpOption<DateTimeOffset>.None : FSharpOption<DateTimeOffset>.Some((DateTimeOffset)value);
+            if (type == typeof(FSharpOption<TimeSpan>))
+                return (value is DBNull) ? FSharpOption<TimeSpan>.None : FSharpOption<TimeSpan>.Some((TimeSpan)value);
 
             return (value is DBNull) ? default : value;
         }

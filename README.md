@@ -112,6 +112,7 @@ static void Main(string[] args)
 ```
 
 .NET Framework 4.5 以降 / .NET Core 2.0 以降であれば、型パラメータを利用してマッピング後のオブジェクトを取得可能です。
+また、非同期版の `QueryAsync` を利用することも可能です。
 
 ```cs
 using System;
@@ -134,8 +135,28 @@ static void Main(string[] args)
 }
 ```
 
+```cs
+using System;
+using System.Data.SqlClient;
+using Mappi;
 
-また、SQL にパラメータを利用したい場合は以下のように渡すことができます。
+static async Task Main(string[] args)
+{
+    var connectionString = "YOUR DB CONNECTION STRING";
+
+    var sql = @"
+      SELECT * FROM sample;
+    ";
+
+    using ( var connection = new SqlConnection(connectionString) )
+    {
+        var samples = await connection.QueryAsync<SAMPLE>(sql);
+        // do something
+    }
+}
+```
+
+SQL にパラメータを利用したい場合は以下のように渡すことができます。
 サンプルでは匿名クラスを利用していますが、通常のクラスや構造体でも問題ありません。
 
 ```cs
@@ -232,6 +253,7 @@ static void Main(string[] args)
 ```
 
 .NET Framework 4.5 以降 / .NET Core 2.0 以降であれば、型パラメータを利用してマッピング後のオブジェクトを取得可能です。
+また、非同期版の `MultipleQueryAsync` を利用することも可能です。
 
 ```cs
 using System;
@@ -255,7 +277,29 @@ static void Main(string[] args)
 }
 ```
 
-また `Query` のときと同様に SQL にパラメータを利用したい場合は以下のように渡すことができます。
+```cs
+using System;
+using System.Data.SqlClient;
+using Mappi;
+
+static async Task Main(string[] args)
+{
+    var connectionString = "YOUR DB CONNECTION STRING";
+
+    var sql = @"
+      SELECT * FROM sample;
+      SELECT * FROM test;
+    ";
+
+    using ( var connection = new SqlConnection(connectionString) )
+    {
+        var (samples, tests) = await connection.MultipleQueryAsync<SAMPLE, TEST>(sql);
+        // do something
+    }
+}
+```
+
+`Query` のときと同様に SQL にパラメータを利用したい場合は以下のように渡すことができます。
 サンプルでは匿名クラスを利用していますが、通常のクラスや構造体でも問題ありません。
 
 ```cs

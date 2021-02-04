@@ -3,7 +3,7 @@ Mappi (マッピー)は .NET Framework 3.5 などの古いフレームワーク�
 get only property や readonly field にも対応しています。
 
 # 使い方
-Mappi は `System.Data.SqlClient.SqlConnection` の拡張メソッドとして定義されていますので、その拡張メソッドを呼び出すだけで利用することができます。
+Mappi は `System.Data.SqlClient.SqlConnection` の拡張メソッドとして定義されていますので、`using Mappi;` をするだけで簡単に導入することが可能です。
 
 ## マッピングするモデルの宣言方法
 
@@ -17,8 +17,8 @@ class Person
 }
 ```
 
-ただ、通常はデータベースのカラム名はスネークケースで付ける場合が多いと思います。
-そういった際は `ColumnAttribute` を利用することで解決できます。
+ただ、通常はデータベースのカラム名はスネークケースで命名することが多いと思います。
+そういった際は `ColumnAttribute` を利用することで命名方法の差を解消することが可能です。
 
 ```cs
 class Person

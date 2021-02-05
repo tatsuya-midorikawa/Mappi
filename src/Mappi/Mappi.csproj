@@ -18,14 +18,17 @@
     <Description>Simple ormapper</Description>
   </PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="Reffy" Version="0.0.8-alpha" />
+  <ItemGroup Condition="'$(TargetFramework)' == 'net35'">
+    <PackageReference Include="jnm2.ReferenceAssemblies.net35" Version="1.0.1" PrivateAssets="All" />
+    <PackageReference Include="FSharp.Core" Version="4.1.18" />
   </ItemGroup>
 
-  <ItemGroup Condition="'$(TargetFramework)' == 'net35'">
-    <PackageReference Include="FSharp.Core">
-      <Version>4.1.18</Version>
-    </PackageReference>
+  <ItemGroup Condition="'$(TargetFramework)' != 'net35'">
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.0" PrivateAssets="All" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Reffy" Version="0.0.8-alpha" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'net40'">

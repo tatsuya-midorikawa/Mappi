@@ -7,6 +7,6 @@ namespace Mappi
 {
     internal interface IDataReader
     {
-        IEnumerable<T> Read<T>() where T : new();
+        IEnumerable<T> Read<T>();
     }
 }

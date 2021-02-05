@@ -38,7 +38,7 @@ namespace Mappi
             _disposedValue = false;
         }
 
-        public IEnumerable<T> Read<T>() where T : new()
+        public IEnumerable<T> Read<T>()
             => _reader.Read<T>();
     }
 }

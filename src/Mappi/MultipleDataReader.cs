@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using Reffy;
 using Microsoft.FSharp.Core;
+using Microsoft.FSharp.Reflection;
 
 namespace Mappi
 {
@@ -43,7 +44,6 @@ namespace Mappi
         public bool HasNext { get; private set; }
 
         public IEnumerable<T> Read<T>()
-            where T : new()
         {
             var type = typeof(T);
             var properties = type.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
@@ -53,7 +53,7 @@ namespace Mappi
             
             while (_reader.Read())
             {
-                var instance = new T();
+                var instance = (T)typeof(T).CreateDefaultInstance();
                 var refinst = __makeref(instance);
                 foreach (var property in properties)
                 {
@@ -105,6 +105,32 @@ namespace Mappi
         private object Map(object value, FieldInfo field)
         {
             var type = field.FieldType;
+
+            // discriminated unions (F#)
+            if (FSharpType.IsUnion(type, FSharpOption<BindingFlags>.None))
+            {
+                var caseinfo = FSharpType.GetUnionCases(type, FSharpOption<BindingFlags>.None).FirstOrDefault();
+                if (caseinfo == null)
+                    throw new Exception("Invalid discriminated-unions.");
+
+                var fields = caseinfo.GetFields();
+                if (fields.Length != 1)
+                    throw new Exception("Only valid for discriminant unions with a single value.");
+
+                var args = new object[] { value };
+                if(caseinfo.DeclaringType.IsValueType)
+                {
+                    return (value is DBNull)
+                        ? caseinfo.DeclaringType.CreateDefaultInstance()
+                        : FSharpValue.MakeUnion(caseinfo, args, FSharpOption<BindingFlags>.None);
+                }
+                else
+                {
+                    return (value is DBNull)
+                        ? null
+                        : FSharpValue.MakeUnion(caseinfo, args, FSharpOption<BindingFlags>.None);
+                }
+            }
 
             // nullable values
             if (type == typeof(Guid?)

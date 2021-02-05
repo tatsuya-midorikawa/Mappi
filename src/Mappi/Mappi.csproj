@@ -19,7 +19,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Reffy" Version="0.0.7-alpha" />
+    <PackageReference Include="Reffy" Version="0.0.8-alpha" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'net35'">

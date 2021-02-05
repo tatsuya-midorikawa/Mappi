@@ -48,7 +48,7 @@ namespace Mappi
             var type = typeof(T);
             var properties = type.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
             var fields = type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-                .Where(field => !field.Name.EndsWith("k__BackingField"))
+                .Where(field => !field.Name.EndsWith(">k__BackingField") && !field.Name.EndsWith("@"))
                 .ToArray();
             
             while (_reader.Read())

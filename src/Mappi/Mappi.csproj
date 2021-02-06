@@ -4,7 +4,7 @@
     <TargetFrameworks>net35;net40;net45;net46;net472;net48;netcoreapp3.1;net5.0</TargetFrameworks>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
-    <Version>0.0.11-alpha</Version>
+    <Version>0.0.13-alpha</Version>
     <Authors>midoliy</Authors>
     <Company>tech leaves</Company>
     <Copyright>© 2021 Tatsuya Midorikawa. All rights rserved</Copyright>
@@ -20,11 +20,11 @@
   <ItemGroup Condition="'$(TargetFramework)' == 'net35'">
     <PackageReference Include="jnm2.ReferenceAssemblies.net35" Version="1.0.1" PrivateAssets="All" />
     <PackageReference Include="FSharp.Core" Version="4.1.18" />
+    <PackageReference Include="Mono.Reflection" Version="1.1.0" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' != 'net35'">
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.0" PrivateAssets="All" />
-    <PackageReference Include="Mono.Reflection" Version="1.1.0" />
   </ItemGroup>
 
   <ItemGroup>

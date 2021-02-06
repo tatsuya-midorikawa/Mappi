@@ -5,7 +5,7 @@ using System.Text;
 
 namespace Mappi
 {
-    class IgnoreAttribute : Attribute
+    public class IgnoreAttribute : Attribute
     {
 
     }

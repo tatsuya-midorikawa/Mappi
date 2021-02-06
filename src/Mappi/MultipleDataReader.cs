@@ -76,9 +76,15 @@ namespace Mappi
                 && !memberType.IsGenericParameter
                 && typeof(FSharpOption<>) == memberType.GetGenericTypeDefinition())
             {
-                return value is DBNull
-                    ? memberType.GetProperty("None", BindingFlags.Public | BindingFlags.Static).GetGetMethod().Invoke(null, null)
-                    : memberType.GetMethod("Some", BindingFlags.Public | BindingFlags.Static).Invoke(null, new object[] { value });
+                if (value is DBNull)
+                    return memberType.GetProperty("None", BindingFlags.Public | BindingFlags.Static).GetGetMethod().Invoke(null, null);
+
+                var genericTypes = memberType.GetGenericArguments();
+                if (genericTypes.Length != 1)
+                    throw new Exception("Invalid fsharp option value.");
+
+                var genericType = genericTypes[0];
+                return memberType.GetMethod("Some", BindingFlags.Public | BindingFlags.Static).Invoke(null, new object[] { Resolve(genericType, value) });
             }
 
             // discriminated unions (F#)
@@ -88,22 +94,8 @@ namespace Mappi
                 if (ctor == null)
                     throw new Exception("Invalid discriminated-unions.");
 
-                if (value is DBNull)
-                {
-                    var ps = ctor.GetFields();
-                    var qs = new object[ps.Length];
-                    for (var i = 0; i < ps.Length; i++)
-                    {
-                        qs[i] = ps[i].PropertyType.IsValueType
-                            ? Activator.CreateInstance(ps[i].PropertyType)
-                            : null;
-                    }
-                    return FSharpValue.MakeUnion(ctor, qs, none);
-                }
-                else
-                {
-                    return FSharpValue.MakeUnion(ctor, new object[] { value }, none);
-                }
+                var field = ctor.GetFields()[0];
+                return FSharpValue.MakeUnion(ctor, new object[] { Resolve(field.PropertyType, value) }, none);
             }
 
             // nullable values

@@ -46,40 +46,15 @@ class Person
 }
 ```
 
-`ColumnAttribute` と `IgnoreAttribute` を組み合わせることで自動実装プロパティ以外のプロパティにも対応可能です。
-
-```cs
-class Person
-{
-    [Column(Name: "name")]
-    private string _name;
-    [Column(Name: "age")]
-    private int _age;
-
-    [Ignore]
-    public string Name 
-    { 
-        get => _name ?? "名無しの権兵衛"; 
-        set => _name = value;
-    }
-    [Ignore]
-    public int Age
-    { 
-        get => _age < 0 ? 0 : _age; 
-        set => _age = value;
-    }
-}
-```
-
-構造体についても同様の方法で宣言できる他、readonly fieldを利用することも可能です。
+構造体についても同様の方法で宣言で可能です。
 
 ```cs
 struct Person
 {
     [Column(Name: "name")]
-    public readonly string Name;
+    public string Name { get; }
     [Column(Name: "age")]
-    public readonly int Age;
+    public int Age { get; }
 }
 ```
 

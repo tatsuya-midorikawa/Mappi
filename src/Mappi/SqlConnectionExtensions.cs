@@ -5,7 +5,7 @@ using System.Data.SqlClient;
 using System.Linq;
 using System.Reflection;
 
-#if NET40 || NET45 || NET451 || NET452 || NET46 || NET461 || NET462 || NET47 || NET471 || NET472 || NET48 || NETCOREAPP2_0 || NETCOREAPP2_1 || NETCOREAPP2_2 || NETCOREAPP3_0 || NETCOREAPP3_1 || NET5_0
+#if NET40 || NET45 || NET451 || NET452 || NET46 || NET461 || NET462 || NET47 || NET471 || NET472 || NET48 || NETCOREAPP3_0 || NETCOREAPP3_1 || NET5_0
 using System.Threading.Tasks;
 #endif
 
@@ -19,7 +19,7 @@ namespace Mappi
         public static DataReader Query(this SqlConnection connection, string sql, object parameter = null)
             => new DataReader(connection.ExecuteReader(sql, parameter));
 
-#if NET45 || NET451 || NET452 || NET46 || NET461 || NET462 || NET47 || NET471 || NET472 || NET48 || NETCOREAPP2_0 || NETCOREAPP2_1 || NETCOREAPP2_2 || NETCOREAPP3_0 || NETCOREAPP3_1 || NET5_0
+#if NET45 || NET451 || NET452 || NET46 || NET461 || NET462 || NET47 || NET471 || NET472 || NET48 ||  NETCOREAPP3_0 || NETCOREAPP3_1 || NET5_0
         private static InvalidOperationException _invalidOperationException 
             = new InvalidOperationException("There is a missing SELECT expression.");
 
@@ -473,7 +473,7 @@ namespace Mappi
 #endif
 
 
-#if NET40 || NET45 || NET451 || NET452 || NET46 || NET461 || NET462 || NET47 || NET471 || NET472 || NET48 || NETCOREAPP2_0 || NETCOREAPP2_1 || NETCOREAPP2_2 || NETCOREAPP3_0 || NETCOREAPP3_1 || NET5_0
+#if NET40 || NET45 || NET451 || NET452 || NET46 || NET461 || NET462 || NET47 || NET471 || NET472 || NET48 || NETCOREAPP3_0 || NETCOREAPP3_1 || NET5_0
         private static Task<SqlDataReader> ExecuteReaderAsync(this SqlConnection connection, string sql, object parameter = null)
         {
             if (connection.State != ConnectionState.Open)

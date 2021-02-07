@@ -10,7 +10,7 @@ using Mono.Reflection;
 
 namespace Mappi
 {
-    public struct MultipleDataReader : IDisposable, IDataReader
+    public sealed class MultipleDataReader : IDisposable, IDataReader
     {
         private SqlDataReader _reader;
         private bool _disposedValue;

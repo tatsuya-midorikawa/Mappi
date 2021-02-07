@@ -42,6 +42,9 @@ namespace Mappi
             _disposedValue = false;
         }
 
+        public int RowCount
+            => _table.Rows.Count;
+
         public IEnumerable<T> EnumerateRows<T>()
         {
             var type = typeof(T);

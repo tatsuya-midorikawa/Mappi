@@ -8,7 +8,7 @@ using Microsoft.FSharp.Core;
 
 namespace Mappi
 {
-    public struct DataReader : IDisposable, IDataReader
+    public sealed class DataReader : IDisposable, IDataReader
     {
         private MultipleDataReader _reader;
         private bool _disposedValue;

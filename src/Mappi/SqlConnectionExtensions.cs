@@ -24,19 +24,18 @@ namespace Mappi
             using (var command = new SqlCommand(sql, connection))
             using (var adapter = new SqlDataAdapter(command))
             {
-                var properties = parameter?.GetType().GetProperties() ?? new PropertyInfo[0];
-                foreach (var property in properties)
-                {
-                    var key = $"@{property.Name}";
-                    var value = property.GetValue(parameter, null);
-                    command.Parameters.AddWithValue(key, value);
-                }
+                foreach (var p in MakeParameters(parameter))
+                    command.Parameters.AddWithValue(p.Key, p.Value);
 
                 var ds = new DataSet();
                 adapter.Fill(ds);
+                
                 return new MultipleBulkDataReader(ds);
             }
         }
+
+        public static BulkDataReader BulkQuery(this SqlConnection connection, string sql, object parameter = null)
+            => connection.MultipleBulkQuery(sql, parameter).Tables.FirstOrDefault();
 
 #if NET45 || NET451 || NET452 || NET46 || NET461 || NET462 || NET47 || NET471 || NET472 || NET48 ||  NETCOREAPP3_0 || NETCOREAPP3_1 || NET5_0
         private static InvalidOperationException _invalidOperationException 
@@ -522,16 +521,19 @@ namespace Mappi
 
             using (var command = new SqlCommand(sql, connection))
             {
-                var properties = parameter?.GetType().GetProperties() ?? new PropertyInfo[0];
-                foreach (var property in properties)
-                {
-                    var key = $"@{property.Name}";
-                    var value = property.GetValue(parameter, null);
-                    command.Parameters.AddWithValue(key, value);
-                }
-
+                foreach (var p in MakeParameters(parameter))
+                    command.Parameters.AddWithValue(p.Key, p.Value);
                 return command.ExecuteReader();
             }
+        }
+
+        private static IEnumerable<KeyValuePair<string, object>> MakeParameters(object parameter)
+        {
+            if (parameter is null)
+                return new KeyValuePair<string, object>[0];
+
+            var properties = parameter?.GetType().GetProperties() ?? new PropertyInfo[0];
+            return properties.Select(property => new KeyValuePair<string, object>($"@{property.Name}", property.GetValue(parameter, null)));
         }
     }
 }

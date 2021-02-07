@@ -19,6 +19,25 @@ namespace Mappi
         public static DataReader Query(this SqlConnection connection, string sql, object parameter = null)
             => new DataReader(connection.ExecuteReader(sql, parameter));
 
+        public static MultipleBulkDataReader MultipleBulkQuery(this SqlConnection connection, string sql, object parameter = null)
+        {
+            using (var command = new SqlCommand(sql, connection))
+            using (var adapter = new SqlDataAdapter(command))
+            {
+                var properties = parameter?.GetType().GetProperties() ?? new PropertyInfo[0];
+                foreach (var property in properties)
+                {
+                    var key = $"@{property.Name}";
+                    var value = property.GetValue(parameter, null);
+                    command.Parameters.AddWithValue(key, value);
+                }
+
+                var ds = new DataSet();
+                adapter.Fill(ds);
+                return new MultipleBulkDataReader(ds);
+            }
+        }
+
 #if NET45 || NET451 || NET452 || NET46 || NET461 || NET462 || NET47 || NET471 || NET472 || NET48 ||  NETCOREAPP3_0 || NETCOREAPP3_1 || NET5_0
         private static InvalidOperationException _invalidOperationException 
             = new InvalidOperationException("There is a missing SELECT expression.");

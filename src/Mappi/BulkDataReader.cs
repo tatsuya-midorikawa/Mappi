@@ -7,12 +7,13 @@ using Reffy;
 using Microsoft.FSharp.Core;
 using Microsoft.FSharp.Reflection;
 using Mono.Reflection;
+using System.Data;
 
 namespace Mappi
 {
-    public struct MultipleDataReader : IDisposable, IDataReader
+    public struct BulkDataReader : IDisposable
     {
-        private SqlDataReader _reader;
+        private DataTable _table;
         private bool _disposedValue;
 
         private void Dispose(bool disposing)
@@ -21,10 +22,10 @@ namespace Mappi
             {
                 if (disposing)
                 {
-                    _reader?.Dispose();
+                    _table?.Dispose();
                 }
 
-                _reader = null;
+                _table = null;
                 _disposedValue = true;
             }
         }
@@ -35,20 +36,16 @@ namespace Mappi
             GC.SuppressFinalize(this);
         }
 
-        public MultipleDataReader(SqlDataReader reader)
+        public BulkDataReader(DataTable table)
         {
-            _reader = reader;
+            _table = table;
             _disposedValue = false;
-            HasNext = true;
         }
 
-        public bool HasNext { get; private set; }
-
-        public IEnumerable<T> Read<T>()
+        public IEnumerable<T> EnumerateRows<T>()
         {
             var type = typeof(T);
-
-            while (_reader.Read())
+            foreach (DataRow row in _table.Rows)
             {
                 var instance = type.MakeDefault();
 
@@ -57,14 +54,12 @@ namespace Mappi
                        .Where(property => property.GetAttribute<IgnoreAttribute>() == null))
                 {
                     var columnName = property.GetAttribute<ColumnAttribute>() is ColumnAttribute c ? c.Name : property.Name;
-                    var value = Resolve(property.PropertyType, _reader[columnName]);
+                    var value = Resolve(property.PropertyType, row[columnName]);
                     property.GetBackingField().SetValueDirect(__makeref(instance), value);
                 }
 
                 yield return (T)instance;
             }
-
-            HasNext = _reader.NextResult();
         }
 
         private static object Resolve(Type memberType, object value)

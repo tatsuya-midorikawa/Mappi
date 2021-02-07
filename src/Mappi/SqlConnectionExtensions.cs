@@ -21,6 +21,9 @@ namespace Mappi
 
         public static MultipleBulkDataReader MultipleBulkQuery(this SqlConnection connection, string sql, object parameter = null)
         {
+            if (connection.State != ConnectionState.Open)
+                connection.Open();
+
             using (var command = new SqlCommand(sql, connection))
             using (var adapter = new SqlDataAdapter(command))
             {
@@ -29,7 +32,8 @@ namespace Mappi
 
                 var ds = new DataSet();
                 adapter.Fill(ds);
-                
+
+                connection.Close();
                 return new MultipleBulkDataReader(ds);
             }
         }

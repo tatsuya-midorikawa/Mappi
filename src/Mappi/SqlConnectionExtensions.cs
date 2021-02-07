@@ -33,7 +33,6 @@ namespace Mappi
                 var ds = new DataSet();
                 adapter.Fill(ds);
 
-                connection.Close();
                 return new MultipleBulkDataReader(ds);
             }
         }

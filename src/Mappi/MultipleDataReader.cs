@@ -8,6 +8,10 @@ using Microsoft.FSharp.Core;
 using Microsoft.FSharp.Reflection;
 using Mono.Reflection;
 
+#if NET45 || NET46 || NET472 || NET48 || NETCOREAPP3_1 || NET5_0
+using System.Threading.Tasks;
+#endif
+
 namespace Mappi
 {
     public sealed class MultipleDataReader : IDisposable, IDataReader
@@ -46,6 +50,9 @@ namespace Mappi
 
         public IEnumerable<T> Read<T>()
         {
+            if (!HasNext)
+                throw new Exception("The data has already been loaded.");
+
             var type = typeof(T);
 
             while (_reader.Read())
@@ -66,6 +73,37 @@ namespace Mappi
 
             HasNext = _reader.NextResult();
         }
+
+#if NET45 || NET46 || NET472 || NET48 || NETCOREAPP3_1 || NET5_0
+        public async Task<IEnumerable<T>> ReadAsync<T>(int baseCapacity = 128)
+            where T : class
+        {
+            if (!HasNext)
+                throw new Exception("The data has already been loaded.");
+
+            var type = typeof(T);
+            var acc = new List<T>(baseCapacity);
+
+            while (await _reader.ReadAsync())
+            {
+                var instance = type.MakeDefault();
+
+                foreach (var property in type
+                       .GetProperties((BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic) ^ BindingFlags.DeclaredOnly)
+                       .Where(property => property.GetAttribute<IgnoreAttribute>() == null))
+                {
+                    var columnName = property.GetAttribute<ColumnAttribute>() is ColumnAttribute c ? c.Name : property.Name;
+                    var value = Resolve(property.PropertyType, _reader[columnName]);
+                    property.GetBackingField().SetValue(instance, value);
+                }
+
+                acc.Add((T)instance);
+            }
+
+            HasNext = _reader.NextResult();
+            return acc;
+        }
+#endif
 
         private static object Resolve(Type memberType, object value)
         {

@@ -46,40 +46,15 @@ class Person
 }
 ```
 
-`ColumnAttribute` と `IgnoreAttribute` を組み合わせることで自動実装プロパティ以外のプロパティにも対応可能です。
-
-```cs
-class Person
-{
-    [Column(Name: "name")]
-    private string _name;
-    [Column(Name: "age")]
-    private int _age;
-
-    [Ignore]
-    public string Name 
-    { 
-        get => _name ?? "名無しの権兵衛"; 
-        set => _name = value;
-    }
-    [Ignore]
-    public int Age
-    { 
-        get => _age < 0 ? 0 : _age; 
-        set => _age = value;
-    }
-}
-```
-
-構造体についても同様の方法で宣言できる他、readonly fieldを利用することも可能です。
+構造体についても同様の方法で宣言で可能です。
 
 ```cs
 struct Person
 {
     [Column(Name: "name")]
-    public readonly string Name;
+    public string Name { get; }
     [Column(Name: "age")]
-    public readonly int Age;
+    public int Age { get; }
 }
 ```
 
@@ -111,15 +86,14 @@ static void Main(string[] args)
 }
 ```
 
-.NET Framework 4.5 以降 / .NET Core 2.0 以降であれば、型パラメータを利用してマッピング後のオブジェクトを取得可能です。
-また、非同期版の `QueryAsync` を利用することも可能です。
+.NET Framework 4.5 以降 / .NET Core 2.0 以降であれば、非同期版の `QueryAsync` を利用することも可能です。
 
 ```cs
 using System;
 using System.Data.SqlClient;
 using Mappi;
 
-static void Main(string[] args)
+static async Task Main(string[] args)
 {
     var connectionString = "YOUR DB CONNECTION STRING";
 
@@ -128,9 +102,12 @@ static void Main(string[] args)
     ";
 
     using ( var connection = new SqlConnection(connectionString) )
+    using ( var reader = await connection.QueryAsync(sql) )
     {
-        var samples = connection.Query<SAMPLE>(sql);
-        // do something
+        foreach ( var item in reader.Read<SAMPLE>() )
+        {
+          // do something
+        }
     }
 }
 ```
@@ -252,30 +229,7 @@ static void Main(string[] args)
 }
 ```
 
-.NET Framework 4.5 以降 / .NET Core 2.0 以降であれば、型パラメータを利用してマッピング後のオブジェクトを取得可能です。
-また、非同期版の `MultipleQueryAsync` を利用することも可能です。
-
-```cs
-using System;
-using System.Data.SqlClient;
-using Mappi;
-
-static void Main(string[] args)
-{
-    var connectionString = "YOUR DB CONNECTION STRING";
-
-    var sql = @"
-      SELECT * FROM sample;
-      SELECT * FROM test;
-    ";
-
-    using ( var connection = new SqlConnection(connectionString) )
-    {
-        var (samples, tests) = connection.MultipleQuery<SAMPLE, TEST>(sql);
-        // do something
-    }
-}
-```
+.NET Framework 4.5 以降 / .NET Core 2.0 以降であれば、非同期版の `MultipleQueryAsync` を利用することも可能です。
 
 ```cs
 using System;
@@ -292,9 +246,17 @@ static async Task Main(string[] args)
     ";
 
     using ( var connection = new SqlConnection(connectionString) )
+    using ( var reader = await connection.MultipleQueryAsync(sql) )
     {
-        var (samples, tests) = await connection.MultipleQueryAsync<SAMPLE, TEST>(sql);
-        // do something
+        foreach ( var item in reader.Read<SAMPLE>() )
+        {
+            // do something
+        }
+
+        foreach ( var item in reader.Read<TEST>() )
+        {
+            // do something
+        }
     }
 }
 ```

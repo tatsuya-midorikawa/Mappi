@@ -13,6 +13,11 @@ namespace Mappi
 {
     public static class SqlConnectionExtensions
     {
+#if NET40 || NET45 || NET46 || NET472 || NET48 || NETCOREAPP3_1 || NET5_0
+        public static MultipleDataReader2 MultipleQuery2(this SqlConnection connection, string sql, object parameter = null)
+            => new MultipleDataReader2(connection.ExecuteReader(sql, parameter));
+#elif
+
         public static MultipleDataReader MultipleQuery(this SqlConnection connection, string sql, object parameter = null)
             => new MultipleDataReader(connection.ExecuteReader(sql, parameter));
 

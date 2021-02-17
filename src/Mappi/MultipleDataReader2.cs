@@ -18,6 +18,43 @@ namespace Mappi
 #if NET40 || NET45 || NET46 || NET472 || NET48 || NETCOREAPP3_1 || NET5_0
     public sealed class MultipleDataReader2 : IDisposable, IDataReader
     {
+        private SqlDataReader _reader;
+        private bool _disposedValue;
+        public bool HasNext { get; private set; }
+
+        static MultipleDataReader2()
+        {
+        }
+
+        public MultipleDataReader2(SqlDataReader reader)
+        {
+            _reader = reader;
+            _disposedValue = false;
+            HasNext = true;
+        }
+
+        private void Dispose(bool disposing)
+        {
+            if (!_disposedValue)
+            {
+                if (disposing)
+                {
+                    _reader?.Dispose();
+                }
+
+                _reader = null;
+                _disposedValue = true;
+            }
+        }
+
+        public void Dispose()
+        {
+            Dispose(disposing: true);
+            GC.SuppressFinalize(this);
+        }
+
+
+
         internal static class SetterCache<T>
         {
             private static Dictionary<string, Action<object, object>> _cache = new Dictionary<string, Action<object, object>>();
@@ -50,41 +87,16 @@ namespace Mappi
                 => _cache;
         }
 
-        private SqlDataReader _reader;
-        private bool _disposedValue;
-
-        static MultipleDataReader2()
+        static class NoneGetterCache
         {
+            private static Dictionary<Type, Func<object>> _cache = new Dictionary<Type, Func<object>>();
+
+            public static void Add(Type type, Func<object> getter)
+                => _cache.Add(type, getter);
+
+            public static bool TryGetSetter(Type type, out Func<object> getter)
+                => _cache.TryGetValue(type, out getter);
         }
-
-        private void Dispose(bool disposing)
-        {
-            if (!_disposedValue)
-            {
-                if (disposing)
-                {
-                    _reader?.Dispose();
-                }
-
-                _reader = null;
-                _disposedValue = true;
-            }
-        }
-
-        public void Dispose()
-        {
-            Dispose(disposing: true);
-            GC.SuppressFinalize(this);
-        }
-
-        public MultipleDataReader2(SqlDataReader reader)
-        {
-            _reader = reader;
-            _disposedValue = false;
-            HasNext = true;
-        }
-
-        public bool HasNext { get; private set; }
 
         public IEnumerable<T> Read<T>() where T : new()
         {
@@ -142,6 +154,21 @@ namespace Mappi
             return expr.Compile();
         }
 
+        private static Func<object> BuildNoneGetter(Type type)
+        {
+            if (NoneGetterCache.TryGetSetter(type, out Func<object> getter))
+                return getter;
+
+            var propertyInfo = type.GetProperty("None");
+            if (propertyInfo == null)
+                throw new ArgumentException("'type' is not FSharpOption<T> type.");
+
+            getter = Expression.Lambda<Func<object>>(
+                Expression.MakeMemberAccess(null, propertyInfo)
+            ).Compile();
+            NoneGetterCache.Add(type, getter);
+            return getter;
+        }
 
 #if NET45 || NET46 || NET472 || NET48 || NETCOREAPP3_1 || NET5_0
         public async Task<IEnumerable<T>> ReadAsync<T>(int baseCapacity = 128)
@@ -248,6 +275,43 @@ namespace Mappi
             if (memberType == typeof(DateTimeOffset?))
                 return value is DBNull ? default(DateTimeOffset?) : value;
 
+            if (memberType == typeof(FSharpOption<int>))
+                return value is DBNull ? FSharpOption<int>.None : FSharpOption<int>.Some((int)value);
+            if (memberType == typeof(FSharpOption<uint>))
+                return value is DBNull ? FSharpOption<uint>.None : FSharpOption<uint>.Some((uint)value);
+            if (memberType == typeof(FSharpOption<short>))
+                return value is DBNull ? FSharpOption<short>.None : FSharpOption<short>.Some((short)value);
+            if (memberType == typeof(FSharpOption<ushort>))
+                return value is DBNull ? FSharpOption<ushort>.None : FSharpOption<ushort>.Some((ushort)value);
+            if (memberType == typeof(FSharpOption<long>))
+                return value is DBNull ? FSharpOption<long>.None : FSharpOption<long>.Some((long)value);
+            if (memberType == typeof(FSharpOption<ulong>))
+                return value is DBNull ? FSharpOption<ulong>.None : FSharpOption<ulong>.Some((ulong)value);
+            if (memberType == typeof(FSharpOption<byte>))
+                return value is DBNull ? FSharpOption<byte>.None : FSharpOption<byte>.Some((byte)value);
+            if (memberType == typeof(FSharpOption<sbyte>))
+                return value is DBNull ? FSharpOption<sbyte>.None : FSharpOption<sbyte>.Some((sbyte)value);
+            if (memberType == typeof(FSharpOption<bool>))
+                return value is DBNull ? FSharpOption<bool>.None : FSharpOption<bool>.Some((bool)value);
+            if (memberType == typeof(FSharpOption<float>))
+                return value is DBNull ? FSharpOption<float>.None : FSharpOption<float>.Some((float)value);
+            if (memberType == typeof(FSharpOption<double>))
+                return value is DBNull ? FSharpOption<double>.None : FSharpOption<double>.Some((double)value);
+            if (memberType == typeof(FSharpOption<decimal>))
+                return value is DBNull ? FSharpOption<decimal>.None : FSharpOption<decimal>.Some((decimal)value);
+            if (memberType == typeof(FSharpOption<char>))
+                return value is DBNull ? FSharpOption<char>.None : FSharpOption<char>.Some((char)value);
+            if (memberType == typeof(FSharpOption<string>))
+                return value is DBNull ? FSharpOption<string>.None : FSharpOption<string>.Some((string)value);
+            if (memberType == typeof(FSharpOption<Guid>))
+                return value is DBNull ? FSharpOption<Guid>.None : FSharpOption<Guid>.Some((Guid)value);
+            if (memberType == typeof(FSharpOption<DateTime>))
+                return value is DBNull ? FSharpOption<DateTime>.None : FSharpOption<DateTime>.Some((DateTime)value);
+            if (memberType == typeof(FSharpOption<DateTimeOffset>))
+                return value is DBNull ? FSharpOption<DateTimeOffset>.None : FSharpOption<DateTimeOffset>.Some((DateTimeOffset)value);
+            if (memberType == typeof(FSharpOption<byte[]>))
+                return value is DBNull ? FSharpOption<byte[]>.None : FSharpOption<byte[]>.Some((byte[])value);
+
             // optional values (F#)
             if (memberType.IsGenericType
                 && !memberType.IsGenericTypeDefinition
@@ -255,8 +319,8 @@ namespace Mappi
                 && typeof(FSharpOption<>) == memberType.GetGenericTypeDefinition())
             {
                 if (value is DBNull)
-                    return memberType.GetProperty("None", BindingFlags.Public | BindingFlags.Static).GetGetMethod().Invoke(null, null);
-
+                    BuildNoneGetter(memberType)();
+                
                 var genericTypes = memberType.GetGenericArguments();
                 if (genericTypes.Length != 1)
                     throw new Exception("Invalid fsharp option value.");

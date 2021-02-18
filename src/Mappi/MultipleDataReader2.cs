@@ -110,6 +110,36 @@ namespace Mappi
                 => _cache.TryGetValue(type, out method);
         }
 
+        static class DiscriminatedUnionsConstructorCache
+        {
+            private static Dictionary<Type, Dictionary<Type, Func<object, object>>> _cache 
+                = new Dictionary<Type, Dictionary<Type, Func<object, object>>>();
+
+            public static void Add(Type duType, Type valueType, Func<object, object> method)
+            { 
+                if (_cache.TryGetValue(duType, out Dictionary<Type, Func<object, object>> duCache))
+                {
+                    if (duCache.TryGetValue(valueType, out Func<object, object> _))
+                        return;
+                    else
+                        duCache.Add(valueType, method);
+                }
+                else
+                {
+                    _cache.Add(duType, new Dictionary<Type, Func<object, object>>());
+                    _cache[duType].Add(valueType, method);
+                }
+            }
+
+            public static bool TryGetSomeMethod(Type duType, Type valueType, out Func<object, object> method)
+            {
+                method = null;
+                return _cache.TryGetValue(duType, out Dictionary<Type, Func<object, object>> cache)
+                        && cache.TryGetValue(valueType, out method);
+            }
+        }
+
+
 
 
 
@@ -205,6 +235,34 @@ namespace Mappi
                 ).Compile();
             SomeMethodCache.Add(type, someMethod);
             return someMethod;
+        }
+
+        private static Func<object, object> BuildDiscriminatedUnionsConstructor(Type duType, Type valueType)
+        {
+            if (DiscriminatedUnionsConstructorCache.TryGetSomeMethod(duType, valueType, out Func<object, object> ctor))
+                return ctor;
+
+            var method = duType
+                .GetMethods(BindingFlags.Public | BindingFlags.Static)
+                .FirstOrDefault(m =>
+                {
+                    var ps = m.GetParameters();
+                    return ps.Length == 1 && ps[0].ParameterType == valueType;
+                });
+
+            if (method == null)
+                throw new ArgumentException($"There are no cases of discriminant unions that are '{valueType.FullName}' type only.");
+
+            var value = Expression.Parameter(typeof(object), "value");
+            ctor = Expression.Lambda<Func<object, object>>(
+                Expression.Call(
+                    null,
+                    method,
+                    Expression.Convert(value, method.GetParameters()[0].ParameterType)),
+                value
+                ).Compile();
+            DiscriminatedUnionsConstructorCache.Add(duType, valueType, ctor);
+            return ctor;
         }
 
         private static bool IsFsharpOption(Type type)
@@ -369,18 +427,12 @@ namespace Mappi
 
                 var genericType = genericTypes[0];
                 return BuildSomeMethod(memberType)(Resolve(genericType, value));
-                //return memberType.GetMethod("Some", BindingFlags.Public | BindingFlags.Static).Invoke(null, new object[] { Resolve(genericType, value) });
             }
 
             // discriminated unions (F#)
             if (FSharpType.IsUnion(memberType, none))
             {
-                var ctor = FSharpType.GetUnionCases(memberType, none).FirstOrDefault(cinfo => cinfo.GetFields().Length == 1);
-                if (ctor == null)
-                    throw new Exception("Invalid discriminated-unions.");
-
-                var field = ctor.GetFields()[0];
-                return FSharpValue.MakeUnion(ctor, new object[] { Resolve(field.PropertyType, value) }, none);
+                return BuildDiscriminatedUnionsConstructor(memberType, value?.GetType())(value);
             }
 
             // nullable values

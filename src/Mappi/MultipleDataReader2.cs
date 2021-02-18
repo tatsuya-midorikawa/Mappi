@@ -53,97 +53,6 @@ namespace Mappi
             GC.SuppressFinalize(this);
         }
 
-
-
-
-        internal static class SetterCache<T>
-        {
-            private static Dictionary<string, Action<object, object>> _cache = new Dictionary<string, Action<object, object>>();
-
-            public static bool Some => 0 < _cache.Count;
-
-            public static void Add(string propertyName, Action<object, object> setter)
-                => _cache.Add(propertyName, setter);
-
-            public static bool TryGetSetter(string propertyName, out Action<object, object> setter)
-                => _cache.TryGetValue(propertyName, out setter);
-        }
-
-        internal static class PropertyCache<T>
-        {
-            internal class Data
-            {
-                public Type Type { get; set; }
-                public string Name { get; set; }
-            }
-
-            private static List<Data> _cache = new List<Data>();
-
-            public static bool Some => 0 < _cache.Count;
-
-            public static void Add(Data info)
-                => _cache.Add(info);
-
-            public static IEnumerable<Data> Enumerate()
-                => _cache;
-        }
-
-        static class NoneGetterCache
-        {
-            private static Dictionary<Type, Func<object>> _cache = new Dictionary<Type, Func<object>>();
-
-            public static void Add(Type type, Func<object> getter)
-                => _cache.Add(type, getter);
-
-            public static bool TryGetNoneGetter(Type type, out Func<object> getter)
-                => _cache.TryGetValue(type, out getter);
-        }
-
-        static class SomeMethodCache
-        {
-            private static Dictionary<Type, Func<object, object>> _cache = new Dictionary<Type, Func<object, object>>();
-
-            public static void Add(Type type, Func<object, object> method)
-                => _cache.Add(type, method);
-
-            public static bool TryGetSomeMethod(Type type, out Func<object, object> method)
-                => _cache.TryGetValue(type, out method);
-        }
-
-        static class DiscriminatedUnionsConstructorCache
-        {
-            private static Dictionary<Type, Dictionary<Type, Func<object, object>>> _cache 
-                = new Dictionary<Type, Dictionary<Type, Func<object, object>>>();
-
-            public static void Add(Type duType, Type valueType, Func<object, object> method)
-            { 
-                if (_cache.TryGetValue(duType, out Dictionary<Type, Func<object, object>> duCache))
-                {
-                    if (duCache.TryGetValue(valueType, out Func<object, object> _))
-                        return;
-                    else
-                        duCache.Add(valueType, method);
-                }
-                else
-                {
-                    _cache.Add(duType, new Dictionary<Type, Func<object, object>>());
-                    _cache[duType].Add(valueType, method);
-                }
-            }
-
-            public static bool TryGetSomeMethod(Type duType, Type valueType, out Func<object, object> method)
-            {
-                method = null;
-                return _cache.TryGetValue(duType, out Dictionary<Type, Func<object, object>> cache)
-                        && cache.TryGetValue(valueType, out method);
-            }
-        }
-
-
-
-
-
-
         public IEnumerable<T> Read<T>() where T : new()
         {
             if (!HasNext)
@@ -182,97 +91,6 @@ namespace Mappi
             HasNext = _reader.NextResult();
         }
 
-        private static Action<object, object> BuildSetter(PropertyInfo propertyInfo)
-        {
-            var method = propertyInfo.GetSetMethod(true);
-            var target = Expression.Parameter(typeof(object), "target");
-            var value = Expression.Parameter(typeof(object), "value");
-
-            var expr =
-                Expression.Lambda<Action<object, object>>(
-                    Expression.Call(
-                        propertyInfo.DeclaringType.IsValueType ?
-                            Expression.Unbox(target, method.DeclaringType) :
-                            Expression.Convert(target, method.DeclaringType),
-                        method,
-                        Expression.Convert(value, method.GetParameters()[0].ParameterType)),
-                        target, value);
-            return expr.Compile();
-        }
-
-        private static Func<object> BuildNoneGetter(Type type)
-        {
-            if (!IsFsharpOption(type))
-                throw new ArgumentException("'type' is not FSharpOption<'T> type.");
-
-            if (NoneGetterCache.TryGetNoneGetter(type, out Func<object> getter))
-                return getter;
-
-            var propertyInfo = type.GetProperty("None");
-            getter = Expression.Lambda<Func<object>>(
-                Expression.MakeMemberAccess(null, propertyInfo)
-            ).Compile();
-            NoneGetterCache.Add(type, getter);
-            return getter;
-        }
-
-        private static Func<object, object> BuildSomeMethod(Type type)
-        {
-            if (!IsFsharpOption(type))
-                throw new ArgumentException("'type' is not FSharpOption<'T> type.");
-
-            if (SomeMethodCache.TryGetSomeMethod(type, out Func<object, object> someMethod))
-                return someMethod;
-
-            var some = type.GetMethod("Some");
-            var value = Expression.Parameter(typeof(object), "value");
-            someMethod = Expression.Lambda<Func<object, object>>(
-                Expression.Call(
-                    null,
-                    some,
-                    Expression.Convert(value, some.GetParameters()[0].ParameterType)),
-                value
-                ).Compile();
-            SomeMethodCache.Add(type, someMethod);
-            return someMethod;
-        }
-
-        private static Func<object, object> BuildDiscriminatedUnionsConstructor(Type duType, Type valueType)
-        {
-            if (DiscriminatedUnionsConstructorCache.TryGetSomeMethod(duType, valueType, out Func<object, object> ctor))
-                return ctor;
-
-            var method = duType
-                .GetMethods(BindingFlags.Public | BindingFlags.Static)
-                .FirstOrDefault(m =>
-                {
-                    var ps = m.GetParameters();
-                    return ps.Length == 1 && ps[0].ParameterType == valueType;
-                });
-
-            if (method == null)
-                throw new ArgumentException($"There are no cases of discriminant unions that are '{valueType.FullName}' type only.");
-
-            var value = Expression.Parameter(typeof(object), "value");
-            ctor = Expression.Lambda<Func<object, object>>(
-                Expression.Call(
-                    null,
-                    method,
-                    Expression.Convert(value, method.GetParameters()[0].ParameterType)),
-                value
-                ).Compile();
-            DiscriminatedUnionsConstructorCache.Add(duType, valueType, ctor);
-            return ctor;
-        }
-
-        private static bool IsFsharpOption(Type type)
-        {
-            return type.IsGenericType
-                && !type.IsGenericTypeDefinition
-                && !type.IsGenericParameter
-                && typeof(FSharpOption<>) == type.GetGenericTypeDefinition();
-        }
-
 #if NET45 || NET46 || NET472 || NET48 || NETCOREAPP3_1 || NET5_0
         public async Task<IEnumerable<T>> ReadAsync<T>(int baseCapacity = 128)
             where T : class
@@ -303,6 +121,22 @@ namespace Mappi
             return acc;
         }
 #endif
+
+        private static bool IsFsharpOption(Type type)
+        {
+            return type.IsGenericType
+                && !type.IsGenericTypeDefinition
+                && !type.IsGenericParameter
+                && typeof(FSharpOption<>) == type.GetGenericTypeDefinition();
+        }
+
+        private static bool IsNullable(Type type)
+        {
+            return type.IsGenericType
+                && !type.IsGenericTypeDefinition
+                && !type.IsGenericParameter
+                && typeof(Nullable<>) == type.GetGenericTypeDefinition();
+        }
 
         private static object Resolve(Type memberType, object value)
         {
@@ -436,10 +270,7 @@ namespace Mappi
             }
 
             // nullable values
-            if (memberType.IsGenericType
-                && !memberType.IsGenericTypeDefinition
-                && !memberType.IsGenericParameter
-                && typeof(Nullable<>) == memberType.GetGenericTypeDefinition())
+            if (IsNullable(memberType))
             {
                 return value is DBNull ? null : value;
             }
@@ -484,6 +315,173 @@ namespace Mappi
 
             throw new Exception("Could not resolve the value.");
         }
+
+        private static Action<object, object> BuildSetter(PropertyInfo propertyInfo)
+        {
+            var method = propertyInfo.GetSetMethod(true);
+            var target = Expression.Parameter(typeof(object), "target");
+            var value = Expression.Parameter(typeof(object), "value");
+
+            var expr =
+                Expression.Lambda<Action<object, object>>(
+                    Expression.Call(
+                        propertyInfo.DeclaringType.IsValueType ?
+                            Expression.Unbox(target, method.DeclaringType) :
+                            Expression.Convert(target, method.DeclaringType),
+                        method,
+                        Expression.Convert(value, method.GetParameters()[0].ParameterType)),
+                        target, value);
+            return expr.Compile();
+        }
+
+        private static Func<object> BuildNoneGetter(Type type)
+        {
+            if (!IsFsharpOption(type))
+                throw new ArgumentException("'type' is not FSharpOption<'T> type.");
+
+            if (NoneGetterCache.TryGetNoneGetter(type, out Func<object> getter))
+                return getter;
+
+            var propertyInfo = type.GetProperty("None");
+            getter = Expression.Lambda<Func<object>>(
+                Expression.MakeMemberAccess(null, propertyInfo)
+            ).Compile();
+            NoneGetterCache.Add(type, getter);
+            return getter;
+        }
+
+        private static Func<object, object> BuildSomeMethod(Type type)
+        {
+            if (!IsFsharpOption(type))
+                throw new ArgumentException("'type' is not FSharpOption<'T> type.");
+
+            if (SomeMethodCache.TryGetSomeMethod(type, out Func<object, object> someMethod))
+                return someMethod;
+
+            var some = type.GetMethod("Some");
+            var value = Expression.Parameter(typeof(object), "value");
+            someMethod = Expression.Lambda<Func<object, object>>(
+                Expression.Call(
+                    null,
+                    some,
+                    Expression.Convert(value, some.GetParameters()[0].ParameterType)),
+                value
+                ).Compile();
+            SomeMethodCache.Add(type, someMethod);
+            return someMethod;
+        }
+
+        private static Func<object, object> BuildDiscriminatedUnionsConstructor(Type duType, Type valueType)
+        {
+            if (DiscriminatedUnionsConstructorCache.TryGetSomeMethod(duType, valueType, out Func<object, object> ctor))
+                return ctor;
+
+            var method = duType
+                .GetMethods(BindingFlags.Public | BindingFlags.Static)
+                .FirstOrDefault(m =>
+                {
+                    var ps = m.GetParameters();
+                    return ps.Length == 1 && ps[0].ParameterType == valueType;
+                });
+
+            if (method == null)
+                throw new ArgumentException($"There are no cases of discriminant unions that are '{valueType.FullName}' type only.");
+
+            var value = Expression.Parameter(typeof(object), "value");
+            ctor = Expression.Lambda<Func<object, object>>(
+                Expression.Call(
+                    null,
+                    method,
+                    Expression.Convert(value, method.GetParameters()[0].ParameterType)),
+                value
+                ).Compile();
+            DiscriminatedUnionsConstructorCache.Add(duType, valueType, ctor);
+            return ctor;
+        }
+
+        private static class SetterCache<T>
+        {
+            private static Dictionary<string, Action<object, object>> _cache = new Dictionary<string, Action<object, object>>();
+
+            public static bool Some => 0 < _cache.Count;
+
+            public static void Add(string propertyName, Action<object, object> setter)
+                => _cache.Add(propertyName, setter);
+
+            public static bool TryGetSetter(string propertyName, out Action<object, object> setter)
+                => _cache.TryGetValue(propertyName, out setter);
+        }
+
+        private static class PropertyCache<T>
+        {
+            internal class Data
+            {
+                public Type Type { get; set; }
+                public string Name { get; set; }
+            }
+
+            private static List<Data> _cache = new List<Data>();
+
+            public static bool Some => 0 < _cache.Count;
+
+            public static void Add(Data info)
+                => _cache.Add(info);
+
+            public static IEnumerable<Data> Enumerate()
+                => _cache;
+        }
+
+        private static class NoneGetterCache
+        {
+            private static Dictionary<Type, Func<object>> _cache = new Dictionary<Type, Func<object>>();
+
+            public static void Add(Type type, Func<object> getter)
+                => _cache.Add(type, getter);
+
+            public static bool TryGetNoneGetter(Type type, out Func<object> getter)
+                => _cache.TryGetValue(type, out getter);
+        }
+
+        private static class SomeMethodCache
+        {
+            private static Dictionary<Type, Func<object, object>> _cache = new Dictionary<Type, Func<object, object>>();
+
+            public static void Add(Type type, Func<object, object> method)
+                => _cache.Add(type, method);
+
+            public static bool TryGetSomeMethod(Type type, out Func<object, object> method)
+                => _cache.TryGetValue(type, out method);
+        }
+
+        private static class DiscriminatedUnionsConstructorCache
+        {
+            private static Dictionary<Type, Dictionary<Type, Func<object, object>>> _cache
+                = new Dictionary<Type, Dictionary<Type, Func<object, object>>>();
+
+            public static void Add(Type duType, Type valueType, Func<object, object> method)
+            {
+                if (_cache.TryGetValue(duType, out Dictionary<Type, Func<object, object>> duCache))
+                {
+                    if (duCache.TryGetValue(valueType, out Func<object, object> _))
+                        return;
+                    else
+                        duCache.Add(valueType, method);
+                }
+                else
+                {
+                    _cache.Add(duType, new Dictionary<Type, Func<object, object>>());
+                    _cache[duType].Add(valueType, method);
+                }
+            }
+
+            public static bool TryGetSomeMethod(Type duType, Type valueType, out Func<object, object> method)
+            {
+                method = null;
+                return _cache.TryGetValue(duType, out Dictionary<Type, Func<object, object>> cache)
+                        && cache.TryGetValue(valueType, out method);
+            }
+        }
+
     }
 #endif
 }

@@ -1,6 +1,5 @@
 # Mappi
 Mappi (マッピー)は .NET Framework 3.5 などの古いフレームワークにも対応したシンプルなO/Rマッパーです。  
-get only property や readonly field にも対応しています。
 
 # 使い方
 Mappi は `System.Data.SqlClient.SqlConnection` の拡張メソッドとして定義されていますので、`using Mappi;` をするだけで簡単に導入することが可能です。
@@ -12,7 +11,7 @@ Mappi は `System.Data.SqlClient.SqlConnection` の拡張メソッドとして�
 ```cs
 class Person
 {
-    public string Name { get; }
+    public string Name { get; private set; }
     public int Age { get; }
 }
 ```
@@ -24,25 +23,25 @@ class Person
 class Person
 {
     [Column(Name: "name")]
-    public string Name { get; }
+    public string Name { get; private set; }
     [Column(Name: "age")]
-    public int Age { get; }
+    public int Age { get; private set; }
 }
 ```
 
-また、モデルとなるクラスや構造体に存在するプロパティ・フィールドはそのままではすべてマッピング対象となってしまうため、データベース上にない値をモデルにつくるとエラーになってしまいます。
+また、モデルとなるクラスや構造体に存在するプロパティはそのままではすべてマッピング対象となってしまうため、データベース上にない値をモデルにつくるとエラーになってしまいます。
 そういった値をプロパティやフィールドとして存在させたい場合は `IgnoreAttribute` を対象に付与してマッピング対象から外す必要があります。
 
 ```cs
 class Person
 {
     [Column(Name: "name")]
-    public string Name { get; }
+    public string Name { get; private set; }
     [Column(Name: "age")]
-    public int Age { get; }
+    public int Age { get; private set; }
 
     [Ignore]
-    private Sex _sex;
+    private Sex _sex { get; set; }
 }
 ```
 
@@ -52,9 +51,9 @@ class Person
 struct Person
 {
     [Column(Name: "name")]
-    public string Name { get; }
+    public string Name { get; private set; }
     [Column(Name: "age")]
-    public int Age { get; }
+    public int Age { get; private set; }
 }
 ```
 

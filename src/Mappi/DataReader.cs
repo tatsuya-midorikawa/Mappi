@@ -12,7 +12,7 @@ using System.Threading.Tasks;
 
 namespace Mappi
 {
-    public sealed class DataReader : IDisposable, IDataReader
+    public sealed class DataReader : IDisposable
     {
         private readonly MultipleDataReader _reader;
         private bool _disposedValue;
@@ -44,7 +44,7 @@ namespace Mappi
             _isRead = false;
         }
 
-        public IEnumerable<T> Read<T>()
+        public IEnumerable<T> Read<T>() where T : new()
         {
             if (_isRead)
                 throw new Exception("The data has already been loaded.");

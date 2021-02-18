@@ -55,6 +55,7 @@ namespace Mappi
 
 
 
+
         internal static class SetterCache<T>
         {
             private static Dictionary<string, Action<object, object>> _cache = new Dictionary<string, Action<object, object>>();
@@ -94,9 +95,24 @@ namespace Mappi
             public static void Add(Type type, Func<object> getter)
                 => _cache.Add(type, getter);
 
-            public static bool TryGetSetter(Type type, out Func<object> getter)
+            public static bool TryGetNoneGetter(Type type, out Func<object> getter)
                 => _cache.TryGetValue(type, out getter);
         }
+
+        static class SomeMethodCache
+        {
+            private static Dictionary<Type, Func<object, object>> _cache = new Dictionary<Type, Func<object, object>>();
+
+            public static void Add(Type type, Func<object, object> method)
+                => _cache.Add(type, method);
+
+            public static bool TryGetSomeMethod(Type type, out Func<object, object> method)
+                => _cache.TryGetValue(type, out method);
+        }
+
+
+
+
 
         public IEnumerable<T> Read<T>() where T : new()
         {
@@ -156,18 +172,47 @@ namespace Mappi
 
         private static Func<object> BuildNoneGetter(Type type)
         {
-            if (NoneGetterCache.TryGetSetter(type, out Func<object> getter))
+            if (!IsFsharpOption(type))
+                throw new ArgumentException("'type' is not FSharpOption<'T> type.");
+
+            if (NoneGetterCache.TryGetNoneGetter(type, out Func<object> getter))
                 return getter;
 
             var propertyInfo = type.GetProperty("None");
-            if (propertyInfo == null)
-                throw new ArgumentException("'type' is not FSharpOption<T> type.");
-
             getter = Expression.Lambda<Func<object>>(
                 Expression.MakeMemberAccess(null, propertyInfo)
             ).Compile();
             NoneGetterCache.Add(type, getter);
             return getter;
+        }
+
+        private static Func<object, object> BuildSomeMethod(Type type)
+        {
+            if (!IsFsharpOption(type))
+                throw new ArgumentException("'type' is not FSharpOption<'T> type.");
+
+            if (SomeMethodCache.TryGetSomeMethod(type, out Func<object, object> someMethod))
+                return someMethod;
+
+            var some = type.GetMethod("Some");
+            var value = Expression.Parameter(typeof(object), "value");
+            someMethod = Expression.Lambda<Func<object, object>>(
+                Expression.Call(
+                    null,
+                    some,
+                    Expression.Convert(value, some.GetParameters()[0].ParameterType)),
+                value
+                ).Compile();
+            SomeMethodCache.Add(type, someMethod);
+            return someMethod;
+        }
+
+        private static bool IsFsharpOption(Type type)
+        {
+            return type.IsGenericType
+                && !type.IsGenericTypeDefinition
+                && !type.IsGenericParameter
+                && typeof(FSharpOption<>) == type.GetGenericTypeDefinition();
         }
 
 #if NET45 || NET46 || NET472 || NET48 || NETCOREAPP3_1 || NET5_0
@@ -313,20 +358,18 @@ namespace Mappi
                 return value is DBNull ? FSharpOption<byte[]>.None : FSharpOption<byte[]>.Some((byte[])value);
 
             // optional values (F#)
-            if (memberType.IsGenericType
-                && !memberType.IsGenericTypeDefinition
-                && !memberType.IsGenericParameter
-                && typeof(FSharpOption<>) == memberType.GetGenericTypeDefinition())
+            if (IsFsharpOption(memberType))
             {
                 if (value is DBNull)
-                    BuildNoneGetter(memberType)();
-                
+                    return BuildNoneGetter(memberType)();
+
                 var genericTypes = memberType.GetGenericArguments();
                 if (genericTypes.Length != 1)
                     throw new Exception("Invalid fsharp option value.");
 
                 var genericType = genericTypes[0];
-                return memberType.GetMethod("Some", BindingFlags.Public | BindingFlags.Static).Invoke(null, new object[] { Resolve(genericType, value) });
+                return BuildSomeMethod(memberType)(Resolve(genericType, value));
+                //return memberType.GetMethod("Some", BindingFlags.Public | BindingFlags.Static).Invoke(null, new object[] { Resolve(genericType, value) });
             }
 
             // discriminated unions (F#)

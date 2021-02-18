@@ -71,7 +71,7 @@ namespace Mappi
             {
                 // コンストラクタの取得
                 var ctor = BuildConstructor(typeof(T), false);
-                if (!ConstructorArgNamesCache.TryGetValue(typeof(T), out ConstructorArgNamesCache.Data[] keys))
+                if (!_constructorArgsInfoCache.TryGetValue(typeof(T), out ConstructorArgsInfo[] keys))
                     throw new ArgumentException("T is invalid record type");
 
                 var args = new object[keys.Length];
@@ -136,7 +136,7 @@ namespace Mappi
             {
                 // コンストラクタの取得
                 var ctor = BuildConstructor(typeof(T), false);
-                if (!ConstructorArgNamesCache.TryGetValue(typeof(T), out ConstructorArgNamesCache.Data[] keys))
+                if (!_constructorArgsInfoCache.TryGetValue(typeof(T), out ConstructorArgsInfo[] keys))
                     throw new ArgumentException("T is invalid record type");
 
                 var args = new object[keys.Length];
@@ -202,6 +202,12 @@ namespace Mappi
                 && typeof(Nullable<>) == type.GetGenericTypeDefinition();
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="memberType"></param>
+        /// <param name="value"></param>
+        /// <returns></returns>
         private static object Resolve(Type memberType, object value)
         {
             var none = FSharpOption<BindingFlags>.None;
@@ -417,16 +423,17 @@ namespace Mappi
         {
             if (!IsFsharpOption(type))
                 throw new ArgumentException("'type' is not FSharpOption<'T> type.");
-
-            if (NoneGetterCache.TryGetNoneGetter(type, out Func<object> getter))
+            
+            if (_noneGetterCache.TryGetValue(type, out Func<object> getter))
                 return getter;
 
             var propertyInfo = type.GetProperty("None");
             getter = Expression.Lambda<Func<object>>(
                 Expression.MakeMemberAccess(null, propertyInfo)
             ).Compile();
-            return NoneGetterCache.GetOrAdd(type, getter);
+            return _noneGetterCache.GetOrAdd(type, getter);
         }
+        private static ConcurrentDictionary<Type, Func<object>> _noneGetterCache = new ConcurrentDictionary<Type, Func<object>>();
 
         /// <summary>
         /// 
@@ -438,7 +445,7 @@ namespace Mappi
             if (!IsFsharpOption(type))
                 throw new ArgumentException("'type' is not FSharpOption<'T> type.");
 
-            if (SomeMethodCache.TryGetSomeMethod(type, out Func<object, object> someMethod))
+            if (_someMethodCache.TryGetValue(type, out Func<object, object> someMethod))
                 return someMethod;
 
             var some = type.GetMethod("Some");
@@ -450,8 +457,9 @@ namespace Mappi
                     Expression.Convert(value, some.GetParameters()[0].ParameterType)),
                 value
                 ).Compile();
-            return SomeMethodCache.GetOrAdd(type, someMethod);
+            return _someMethodCache.GetOrAdd(type, someMethod);
         }
+        private static ConcurrentDictionary<Type, Func<object, object>> _someMethodCache = new ConcurrentDictionary<Type, Func<object, object>>();
 
         /// <summary>
         /// 
@@ -514,7 +522,7 @@ namespace Mappi
         /// <returns></returns>
         static Func<object[], object> BuildConstructor(Type type, bool useDefaultConstructor = true)
         {
-            if (ConstructorCache.TryGetValue(type, out Func<object[], object> ctor))
+            if (_constructorCache.TryGetValue(type, out Func<object[], object> ctor))
                 return ctor;
 
             var args = Expression.Parameter(typeof(object[]), "args");
@@ -556,14 +564,17 @@ namespace Mappi
                         : prop.Name;
                 }
 
-                var data = new ConstructorArgNamesCache.Data[keys.Length];
+                var data = new ConstructorArgsInfo[keys.Length];
                 for (var i = 0; i < parameters.Length; i++)
-                    data[i] = new ConstructorArgNamesCache.Data { Type = parameters[i].ParameterType, Name = keys[i] };
-                ConstructorArgNamesCache.GetOrAdd(type, data);
+                    data[i] = new ConstructorArgsInfo { Type = parameters[i].ParameterType, Name = keys[i] };
+                _constructorArgsInfoCache.GetOrAdd(type, data);
             }
 
-            return ConstructorCache.GetOrAdd(type, ctor);
+            return _constructorCache.GetOrAdd(type, ctor);
         }
+        private static ConcurrentDictionary<Type, Func<object[], object>> _constructorCache = new ConcurrentDictionary<Type, Func<object[], object>>();
+        private static ConcurrentDictionary<Type, ConstructorArgsInfo[]> _constructorArgsInfoCache = new ConcurrentDictionary<Type, ConstructorArgsInfo[]>();
+
 
         /// <summary>
         /// 
@@ -609,36 +620,6 @@ namespace Mappi
         /// <summary>
         /// 
         /// </summary>
-        private static class NoneGetterCache
-        {
-            private static ConcurrentDictionary<Type, Func<object>> _cache
-                = new ConcurrentDictionary<Type, Func<object>>();
-
-            public static Func<object> GetOrAdd(Type type, Func<object> getter)
-                => _cache.GetOrAdd(type, getter);
-
-            public static bool TryGetNoneGetter(Type type, out Func<object> getter)
-                => _cache.TryGetValue(type, out getter);
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        private static class SomeMethodCache
-        {
-            private static ConcurrentDictionary<Type, Func<object, object>> _cache
-                = new ConcurrentDictionary<Type, Func<object, object>>();
-
-            public static Func<object, object> GetOrAdd(Type type, Func<object, object> method)
-                => _cache.GetOrAdd(type, method);
-
-            public static bool TryGetSomeMethod(Type type, out Func<object, object> method)
-                => _cache.TryGetValue(type, out method);
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
         private static class DiscriminatedUnionsConstructorCache
         {
             private static ConcurrentDictionary<Type, ConcurrentDictionary<Type, Func<object, object>>> _cache
@@ -667,37 +648,10 @@ namespace Mappi
             }
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        private static class ConstructorCache
+        private class ConstructorArgsInfo
         {
-            private static ConcurrentDictionary<Type, Func<object[], object>> _cache = new ConcurrentDictionary<Type, Func<object[], object>>();
-
-            public static Func<object[], object> GetOrAdd(Type type, Func<object[], object> ctor)
-                => _cache.GetOrAdd(type, ctor);
-
-            public static bool TryGetValue(Type type, out Func<object[], object> ctor)
-                => _cache.TryGetValue(type, out ctor);
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        private static class ConstructorArgNamesCache
-        {
-            public class Data
-            {
-                public Type Type { get; set; }
-                public string Name { get; set; }
-            }
-            private static ConcurrentDictionary<Type, Data[]> _cache = new ConcurrentDictionary<Type, Data[]>();
-
-            public static Data[] GetOrAdd(Type type, Data[] data)
-                => _cache.GetOrAdd(type, data);
-
-            public static bool TryGetValue(Type type, out Data[] data)
-                => _cache.TryGetValue(type, out data);
+            public Type Type { get; set; }
+            public string Name { get; set; }
         }
     }
 #endif

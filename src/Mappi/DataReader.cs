@@ -12,7 +12,7 @@ using System.Threading.Tasks;
 
 namespace Mappi
 {
-    public sealed class DataReader : IDisposable, IDataReader
+    public sealed class DataReader : IDisposable
     {
         private readonly MultipleDataReader _reader;
         private bool _disposedValue;

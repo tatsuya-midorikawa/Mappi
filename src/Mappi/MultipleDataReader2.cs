@@ -8,6 +8,9 @@ using Microsoft.FSharp.Core;
 using Microsoft.FSharp.Reflection;
 using Mono.Reflection;
 using System.Linq.Expressions;
+#if NET40 || NET45 || NET46 || NET472 || NET48 || NETCOREAPP3_1 || NET5_0
+using System.Collections.Concurrent;
+#endif
 
 #if NET45 || NET46 || NET472 || NET48 || NETCOREAPP3_1 || NET5_0
 using System.Threading.Tasks;
@@ -53,40 +56,64 @@ namespace Mappi
             GC.SuppressFinalize(this);
         }
 
-        public IEnumerable<T> Read<T>() where T : new()
+        public IEnumerable<T> Read<T>()
         {
             if (!HasNext)
                 throw new Exception("The data has already been loaded.");
 
-            // setterを作成する
-            if (!PropertyCache<T>.Some || !SetterCache<T>.Some)
+            var isFsharpRecordType = FSharpType.IsRecord(typeof(T), FSharpOption<BindingFlags>.None);
+
+            // F# record型の場合とそれ以外とで処理を分岐する.
+            //   -> F# recordは引数なしのデフォルトコンストラクタがないため.
+            if (FSharpType.IsRecord(typeof(T), FSharpOption<BindingFlags>.None))
             {
-                foreach (var property in typeof(T)
-                    .GetProperties((BindingFlags.Instance | BindingFlags.Public) ^ BindingFlags.DeclaredOnly)
-                    .Where(property => property.GetAttribute<IgnoreAttribute>() == null))
+                // コンストラクタの取得
+                var ctor = BuildConstructor(typeof(T), false);
+                if (!ConstructorArgNamesCache.TryGetValue(typeof(T), out ConstructorArgNamesCache.Data[] keys))
+                    throw new ArgumentException("T is invalid record type");
+
+                var args = new object[keys.Length];
+                while (_reader.Read())
                 {
-                    var columnName = property.GetAttribute<ColumnAttribute>() is ColumnAttribute c ? c.Name : property.Name;
-                    var data = new PropertyCache<T>.Data{ Name = columnName, Type = property.PropertyType };
-                    PropertyCache<T>.Add(data);
-                    SetterCache<T>.Add(data.Name, BuildSetter(property));
+                    for (var i = 0; i < keys.Length; i++)
+                        args[i] = Resolve(keys[i].Type, _reader[keys[i].Name]);
+
+                    yield return (T)ctor(args);
                 }
             }
-
-            while (_reader.Read())
+            else
             {
-                object instance = new T();
-
-                foreach (var property in PropertyCache<T>.Enumerate())
+                // setterを作成する
+                if (!PropertyCache<T>.Some || !SetterCache<T>.Some)
                 {
-                    if (SetterCache<T>.TryGetSetter(property.Name, out Action<object, object> setter))
+                    foreach (var property in typeof(T)
+                        .GetProperties((BindingFlags.Instance | BindingFlags.Public) ^ BindingFlags.DeclaredOnly)
+                        .Where(property => property.GetAttribute<IgnoreAttribute>() == null))
                     {
-                        var value = Resolve(property.Type, _reader[property.Name]);
-                        setter(instance, value);
+                        var columnName = property.GetAttribute<ColumnAttribute>() is ColumnAttribute c ? c.Name : property.Name;
+                        var data = new PropertyCache<T>.Data { Name = columnName, Type = property.PropertyType };
+                        PropertyCache<T>.Add(data);
+                        SetterCache<T>.GetOrAdd(data.Name, BuildSetter(property));
                     }
                 }
 
-                yield return (T)instance;
+                while (_reader.Read())
+                {
+                    object instance = BuildConstructor(typeof(T))(null);
+
+                    foreach (var property in PropertyCache<T>.Enumerate())
+                    {
+                        if (SetterCache<T>.TryGetSetter(property.Name, out Action<object, object> setter))
+                        {
+                            var value = Resolve(property.Type, _reader[property.Name]);
+                            setter(instance, value);
+                        }
+                    }
+
+                    yield return (T)instance;
+                }
             }
+
 
             HasNext = _reader.NextResult();
         }
@@ -266,7 +293,12 @@ namespace Mappi
             // discriminated unions (F#)
             if (FSharpType.IsUnion(memberType, none))
             {
-                return BuildDiscriminatedUnionsConstructor(memberType, value?.GetType())(value);
+                if (!(_duConstructorParamTypeCache.TryGetValue(memberType, out Type paramType)))
+                {
+                    var valueinfo = GetDiscriminatedUnionsConstructorInfo(memberType, value?.GetType());
+                    paramType = valueinfo.GetParameters()[0].ParameterType;
+                }
+                return BuildDiscriminatedUnionsConstructor(memberType, paramType)(Resolve(paramType, value));
             }
 
             // nullable values
@@ -316,6 +348,11 @@ namespace Mappi
             throw new Exception("Could not resolve the value.");
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="propertyInfo"></param>
+        /// <returns></returns>
         private static Action<object, object> BuildSetter(PropertyInfo propertyInfo)
         {
             var method = propertyInfo.GetSetMethod(true);
@@ -334,6 +371,11 @@ namespace Mappi
             return expr.Compile();
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="type"></param>
+        /// <returns></returns>
         private static Func<object> BuildNoneGetter(Type type)
         {
             if (!IsFsharpOption(type))
@@ -346,10 +388,14 @@ namespace Mappi
             getter = Expression.Lambda<Func<object>>(
                 Expression.MakeMemberAccess(null, propertyInfo)
             ).Compile();
-            NoneGetterCache.Add(type, getter);
-            return getter;
+            return NoneGetterCache.GetOrAdd(type, getter);
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="type"></param>
+        /// <returns></returns>
         private static Func<object, object> BuildSomeMethod(Type type)
         {
             if (!IsFsharpOption(type))
@@ -367,25 +413,51 @@ namespace Mappi
                     Expression.Convert(value, some.GetParameters()[0].ParameterType)),
                 value
                 ).Compile();
-            SomeMethodCache.Add(type, someMethod);
-            return someMethod;
+            return SomeMethodCache.GetOrAdd(type, someMethod);
         }
 
-        private static Func<object, object> BuildDiscriminatedUnionsConstructor(Type duType, Type valueType)
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="duType"></param>
+        /// <param name="valueType"></param>
+        /// <returns></returns>
+        private static MethodInfo GetDiscriminatedUnionsConstructorInfo(Type duType, Type valueType)
         {
-            if (DiscriminatedUnionsConstructorCache.TryGetSomeMethod(duType, valueType, out Func<object, object> ctor))
-                return ctor;
+            if (_duConstructorParamsCache.TryGetValue(duType, out MethodInfo info))
+                return info;
 
             var method = duType
                 .GetMethods(BindingFlags.Public | BindingFlags.Static)
                 .FirstOrDefault(m =>
                 {
                     var ps = m.GetParameters();
-                    return ps.Length == 1 && ps[0].ParameterType == valueType;
+                    return valueType == typeof(DBNull)
+                        ? ps.Length == 1
+                        : ps.Length == 1 && ps[0].ParameterType == valueType;
                 });
 
             if (method == null)
                 throw new ArgumentException($"There are no cases of discriminant unions that are '{valueType.FullName}' type only.");
+
+            return _duConstructorParamsCache.GetOrAdd(duType, method);
+        }
+        private static ConcurrentDictionary<Type, MethodInfo> _duConstructorParamsCache = new ConcurrentDictionary<Type, MethodInfo>();
+        private static ConcurrentDictionary<Type, Type> _duConstructorParamTypeCache = new ConcurrentDictionary<Type, Type>();
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="duType"></param>
+        /// <param name="valueType"></param>
+        /// <returns></returns>
+        private static Func<object, object> BuildDiscriminatedUnionsConstructor(Type duType, Type valueType)
+        {
+            if (DiscriminatedUnionsConstructorCache.TryGetSomeMethod(duType, valueType, out Func<object, object> ctor))
+                return ctor;
+
+            var method = GetDiscriminatedUnionsConstructorInfo(duType, valueType);
+            valueType = method.GetParameters()[0].ParameterType;
 
             var value = Expression.Parameter(typeof(object), "value");
             ctor = Expression.Lambda<Func<object, object>>(
@@ -395,23 +467,89 @@ namespace Mappi
                     Expression.Convert(value, method.GetParameters()[0].ParameterType)),
                 value
                 ).Compile();
-            DiscriminatedUnionsConstructorCache.Add(duType, valueType, ctor);
-            return ctor;
+            return DiscriminatedUnionsConstructorCache.GetOrAdd(duType, valueType, ctor);
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="type"></param>
+        /// <returns></returns>
+        static Func<object[], object> BuildConstructor(Type type, bool useDefaultConstructor = true)
+        {
+            if (ConstructorCache.TryGetValue(type, out Func<object[], object> ctor))
+                return ctor;
+
+            var args = Expression.Parameter(typeof(object[]), "args");
+            var ctorInfos = type.GetConstructors();
+            var ctorInfo = useDefaultConstructor
+                ? ctorInfos.FirstOrDefault(ci => ci.GetParameters().Length == 0)
+                : ctorInfos.FirstOrDefault();
+
+            if (ctorInfo == null)
+                throw new ArgumentException("The constructor is not available.");
+
+            var parameters = ctorInfo.GetParameters();
+            var parametersExpr = parameters
+                .Select((x, i) =>
+                    Expression.Convert(Expression.ArrayIndex(args, Expression.Constant(i)),
+                    x.ParameterType))
+                .ToArray();
+
+            ctor = Expression.Lambda<Func<object[], object>>(
+                Expression.Convert(
+                    Expression.New(ctorInfo, parametersExpr),
+                    typeof(object)),
+                args).Compile();
+
+            // F# record型の場合のみ, コンストラクタの引数情報をキャッシュする
+            if (FSharpType.IsRecord(type, FSharpOption<BindingFlags>.None))
+            {
+                var keys = parameters.Select(p => p.Name).ToArray();
+                var props = type
+                    .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                    .Where(p => p.GetAttribute<CompilationMappingAttribute>() != null)
+                    .OrderBy(p => p.GetAttribute<CompilationMappingAttribute>().SequenceNumber);
+
+                foreach (var prop in props)
+                {
+                    var mapping = prop.GetAttribute<CompilationMappingAttribute>();
+                    keys[mapping.SequenceNumber] = prop.GetAttribute<ColumnAttribute>() is ColumnAttribute colmun
+                        ? colmun.Name
+                        : prop.Name;
+                }
+
+                var data = new ConstructorArgNamesCache.Data[keys.Length];
+                for (var i = 0; i < parameters.Length; i++)
+                    data[i] = new ConstructorArgNamesCache.Data { Type = parameters[i].ParameterType, Name = keys[i] };
+                ConstructorArgNamesCache.GetOrAdd(type, data);
+            }
+
+            return ConstructorCache.GetOrAdd(type, ctor);
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
         private static class SetterCache<T>
         {
-            private static Dictionary<string, Action<object, object>> _cache = new Dictionary<string, Action<object, object>>();
+            private static ConcurrentDictionary<string, Action<object, object>> _cache
+                = new ConcurrentDictionary<string, Action<object, object>>();
 
             public static bool Some => 0 < _cache.Count;
 
-            public static void Add(string propertyName, Action<object, object> setter)
-                => _cache.Add(propertyName, setter);
+            public static Action<object, object> GetOrAdd(string propertyName, Action<object, object> setter)
+                => _cache.GetOrAdd(propertyName, setter);
 
             public static bool TryGetSetter(string propertyName, out Action<object, object> setter)
                 => _cache.TryGetValue(propertyName, out setter);
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
         private static class PropertyCache<T>
         {
             internal class Data
@@ -431,57 +569,99 @@ namespace Mappi
                 => _cache;
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
         private static class NoneGetterCache
         {
-            private static Dictionary<Type, Func<object>> _cache = new Dictionary<Type, Func<object>>();
+            private static ConcurrentDictionary<Type, Func<object>> _cache
+                = new ConcurrentDictionary<Type, Func<object>>();
 
-            public static void Add(Type type, Func<object> getter)
-                => _cache.Add(type, getter);
+            public static Func<object> GetOrAdd(Type type, Func<object> getter)
+                => _cache.GetOrAdd(type, getter);
 
             public static bool TryGetNoneGetter(Type type, out Func<object> getter)
                 => _cache.TryGetValue(type, out getter);
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
         private static class SomeMethodCache
         {
-            private static Dictionary<Type, Func<object, object>> _cache = new Dictionary<Type, Func<object, object>>();
+            private static ConcurrentDictionary<Type, Func<object, object>> _cache
+                = new ConcurrentDictionary<Type, Func<object, object>>();
 
-            public static void Add(Type type, Func<object, object> method)
-                => _cache.Add(type, method);
+            public static Func<object, object> GetOrAdd(Type type, Func<object, object> method)
+                => _cache.GetOrAdd(type, method);
 
             public static bool TryGetSomeMethod(Type type, out Func<object, object> method)
                 => _cache.TryGetValue(type, out method);
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
         private static class DiscriminatedUnionsConstructorCache
         {
-            private static Dictionary<Type, Dictionary<Type, Func<object, object>>> _cache
-                = new Dictionary<Type, Dictionary<Type, Func<object, object>>>();
+            private static ConcurrentDictionary<Type, ConcurrentDictionary<Type, Func<object, object>>> _cache
+                = new ConcurrentDictionary<Type, ConcurrentDictionary<Type, Func<object, object>>>();
 
-            public static void Add(Type duType, Type valueType, Func<object, object> method)
+            public static Func<object, object> GetOrAdd(Type duType, Type valueType, Func<object, object> method)
             {
-                if (_cache.TryGetValue(duType, out Dictionary<Type, Func<object, object>> duCache))
+                if (_cache.TryGetValue(duType, out ConcurrentDictionary<Type, Func<object, object>> duCache))
                 {
-                    if (duCache.TryGetValue(valueType, out Func<object, object> _))
-                        return;
+                    if (duCache.TryGetValue(valueType, out Func<object, object> ctor))
+                        return ctor;
                     else
-                        duCache.Add(valueType, method);
+                        return duCache.GetOrAdd(valueType, method);
                 }
                 else
                 {
-                    _cache.Add(duType, new Dictionary<Type, Func<object, object>>());
-                    _cache[duType].Add(valueType, method);
+                    return _cache.GetOrAdd(duType, new ConcurrentDictionary<Type, Func<object, object>>()).GetOrAdd(valueType, method);
                 }
             }
 
             public static bool TryGetSomeMethod(Type duType, Type valueType, out Func<object, object> method)
             {
                 method = null;
-                return _cache.TryGetValue(duType, out Dictionary<Type, Func<object, object>> cache)
+                return _cache.TryGetValue(duType, out ConcurrentDictionary<Type, Func<object, object>> cache)
                         && cache.TryGetValue(valueType, out method);
             }
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        private static class ConstructorCache
+        {
+            private static ConcurrentDictionary<Type, Func<object[], object>> _cache = new ConcurrentDictionary<Type, Func<object[], object>>();
+
+            public static Func<object[], object> GetOrAdd(Type type, Func<object[], object> ctor)
+                => _cache.GetOrAdd(type, ctor);
+
+            public static bool TryGetValue(Type type, out Func<object[], object> ctor)
+                => _cache.TryGetValue(type, out ctor);
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        private static class ConstructorArgNamesCache
+        {
+            public class Data
+            {
+                public Type Type { get; set; }
+                public string Name { get; set; }
+            }
+            private static ConcurrentDictionary<Type, Data[]> _cache = new ConcurrentDictionary<Type, Data[]>();
+
+            public static Data[] GetOrAdd(Type type, Data[] data)
+                => _cache.GetOrAdd(type, data);
+
+            public static bool TryGetValue(Type type, out Data[] data)
+                => _cache.TryGetValue(type, out data);
+        }
     }
 #endif
 }

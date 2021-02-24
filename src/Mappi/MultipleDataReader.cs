@@ -25,7 +25,7 @@ namespace Mappi
     {
         private SqlDataReader _reader;
         private bool _disposedValue;
-        private IDataResolver _resolver;
+        private readonly IDataResolver _resolver;
         public bool HasNext { get; private set; }
 
         static MultipleDataReader()

@@ -7,6 +7,7 @@ using Reffy;
 using Microsoft.FSharp.Core;
 using Microsoft.FSharp.Reflection;
 using System.Data;
+using Mappi.Resolvers;
 
 namespace Mappi
 {
@@ -37,10 +38,10 @@ namespace Mappi
             GC.SuppressFinalize(this);
         }
 
-        public MultipleBulkDataReader(DataSet dataset)
+        public MultipleBulkDataReader(DataSet dataset, IDataResolver resolver = null)
         {
             _dataset = dataset;
-            _tables = dataset.Tables.Cast<DataTable>().Select(table => new BulkDataReader(table)).ToArray();
+            _tables = dataset.Tables.Cast<DataTable>().Select(table => new BulkDataReader(table, resolver)).ToArray();
             _disposedValue = false;
         }
 

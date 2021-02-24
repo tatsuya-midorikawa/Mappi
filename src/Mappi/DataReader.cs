@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using Reffy;
 using Microsoft.FSharp.Core;
+using Mappi.Resolvers;
 
 #if NET45 || NET46 || NET472 || NET48 || NETCOREAPP3_1 || NET5_0
 using System.Threading.Tasks;
@@ -37,9 +38,9 @@ namespace Mappi
             GC.SuppressFinalize(this);
         }
 
-        public DataReader(SqlDataReader reader)
+        public DataReader(SqlDataReader reader, IDataResolver resolver = null)
         {
-            _reader = new MultipleDataReader(reader);
+            _reader = new MultipleDataReader(reader, resolver);
             _disposedValue = false;
             _isRead = false;
         }

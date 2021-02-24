@@ -130,7 +130,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Reffy" Version="1.0.0" />
+    <PackageReference Include="Reffy" Version="1.0.1" />
   </ItemGroup>
 
 </Project>

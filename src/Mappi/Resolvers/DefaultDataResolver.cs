@@ -1,17 +1,22 @@
-﻿#if NET40 || NET45 || NET46 || NET472 || NET48 || NETCOREAPP3_1 || NET5_0
-using Microsoft.FSharp.Core;
+﻿using Microsoft.FSharp.Core;
+using Microsoft.FSharp.Reflection;
+using Reffy;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Text;
+
+#if NET40 || NET45 || NET46 || NET472 || NET48 || NETCOREAPP3_1 || NET5_0
 using System.Collections.Concurrent;
+#endif
 
 namespace Mappi.Resolvers
 {
-    public class DefaultDataResolver : IDataResolver
+    public struct DefaultDataResolver : IDataResolver
     {
+#if NET40 || NET45 || NET46 || NET472 || NET48 || NETCOREAPP3_1 || NET5_0
         public object Resolve(Type propertyType, object value)
         {
             var none = FSharpOption<BindingFlags>.None;
@@ -195,28 +200,6 @@ namespace Mappi.Resolvers
             throw new Exception("Could not resolve the value.");
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="propertyInfo"></param>
-        /// <returns></returns>
-        private static Action<object, object> BuildSetter(PropertyInfo propertyInfo)
-        {
-            var method = propertyInfo.GetSetMethod(true);
-            var target = Expression.Parameter(typeof(object), "target");
-            var value = Expression.Parameter(typeof(object), "value");
-
-            var expr =
-                Expression.Lambda<Action<object, object>>(
-                    Expression.Call(
-                        propertyInfo.DeclaringType.IsValueType ?
-                            Expression.Unbox(target, method.DeclaringType) :
-                            Expression.Convert(target, method.DeclaringType),
-                        method,
-                        Expression.Convert(value, method.GetParameters()[0].ParameterType)),
-                        target, value);
-            return expr.Compile();
-        }
 
         /// <summary>
         /// 
@@ -322,67 +305,6 @@ namespace Mappi.Resolvers
         /// <summary>
         /// 
         /// </summary>
-        /// <param name="type"></param>
-        /// <returns></returns>
-        static Func<object[], object> BuildConstructor(Type type, bool useDefaultConstructor = true)
-        {
-            if (_constructorCache.TryGetValue(type, out Func<object[], object> ctor))
-                return ctor;
-
-            var args = Expression.Parameter(typeof(object[]), "args");
-            var ctorInfos = type.GetConstructors();
-            var ctorInfo = useDefaultConstructor
-                ? ctorInfos.FirstOrDefault(ci => ci.GetParameters().Length == 0)
-                : ctorInfos.FirstOrDefault();
-
-            if (ctorInfo == null)
-                throw new ArgumentException("The constructor is not available.");
-
-            var parameters = ctorInfo.GetParameters();
-            var parametersExpr = parameters
-                .Select((x, i) =>
-                    Expression.Convert(Expression.ArrayIndex(args, Expression.Constant(i)),
-                    x.ParameterType))
-                .ToArray();
-
-            ctor = Expression.Lambda<Func<object[], object>>(
-                Expression.Convert(
-                    Expression.New(ctorInfo, parametersExpr),
-                    typeof(object)),
-                args).Compile();
-
-            // F# record型の場合のみ, コンストラクタの引数情報をキャッシュする
-            if (FSharpType.IsRecord(type, FSharpOption<BindingFlags>.None))
-            {
-                var keys = parameters.Select(p => p.Name).ToArray();
-                var props = type
-                    .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                    .Where(p => p.GetAttribute<CompilationMappingAttribute>() != null)
-                    .OrderBy(p => p.GetAttribute<CompilationMappingAttribute>().SequenceNumber);
-
-                foreach (var prop in props)
-                {
-                    var mapping = prop.GetAttribute<CompilationMappingAttribute>();
-                    keys[mapping.SequenceNumber] = prop.GetAttribute<ColumnAttribute>() is ColumnAttribute colmun
-                        ? colmun.Name
-                        : prop.Name;
-                }
-
-                var data = new ConstructorArgsInfo[keys.Length];
-                for (var i = 0; i < parameters.Length; i++)
-                    data[i] = new ConstructorArgsInfo { Type = parameters[i].ParameterType, Name = keys[i] };
-                _constructorArgsInfoCache.GetOrAdd(type, data);
-            }
-
-            return _constructorCache.GetOrAdd(type, ctor);
-        }
-        private static ConcurrentDictionary<Type, Func<object[], object>> _constructorCache = new ConcurrentDictionary<Type, Func<object[], object>>();
-        private static ConcurrentDictionary<Type, ConstructorArgsInfo[]> _constructorArgsInfoCache = new ConcurrentDictionary<Type, ConstructorArgsInfo[]>();
-
-
-        /// <summary>
-        /// 
-        /// </summary>
         /// <typeparam name="T"></typeparam>
         private static class SetterCache<T>
         {
@@ -473,6 +395,198 @@ namespace Mappi.Resolvers
                 && !type.IsGenericParameter
                 && typeof(Nullable<>) == type.GetGenericTypeDefinition();
         }
+#else
+        public object Resolve(Type memberType, object value)
+        {
+            var none = FSharpOption<BindingFlags>.None;
+
+            if (memberType == typeof(int))
+                return value is DBNull ? default(int) : value;
+            if (memberType == typeof(uint))
+                return value is DBNull ? default(uint) : value;
+            if (memberType == typeof(short))
+                return value is DBNull ? default(short) : value;
+            if (memberType == typeof(ushort))
+                return value is DBNull ? default(ushort) : value;
+            if (memberType == typeof(long))
+                return value is DBNull ? default(long) : value;
+            if (memberType == typeof(ulong))
+                return value is DBNull ? default(ulong) : value;
+            if (memberType == typeof(byte))
+                return value is DBNull ? default(byte) : value;
+            if (memberType == typeof(sbyte))
+                return value is DBNull ? default(sbyte) : value;
+            if (memberType == typeof(bool))
+                return value is DBNull ? default(bool) : value;
+            if (memberType == typeof(float))
+                return value is DBNull ? default(float) : value;
+            if (memberType == typeof(double))
+                return value is DBNull ? default(double) : value;
+            if (memberType == typeof(decimal))
+                return value is DBNull ? default(decimal) : value;
+            if (memberType == typeof(char))
+                return value is DBNull ? default(char) : value;
+            if (memberType == typeof(string))
+                return value is DBNull ? default(string) : value;
+            if (memberType == typeof(Guid))
+                return value is DBNull ? default(Guid) : value;
+            if (memberType == typeof(DateTime))
+                return value is DBNull ? default(DateTime) : value;
+            if (memberType == typeof(DateTimeOffset))
+                return value is DBNull ? default(DateTimeOffset) : value;
+            if (memberType == typeof(byte[]))
+                return value;
+
+            if (memberType == typeof(int?))
+                return value is DBNull ? default(int?) : value;
+            if (memberType == typeof(uint?))
+                return value is DBNull ? default(uint?) : value;
+            if (memberType == typeof(short?))
+                return value is DBNull ? default(short?) : value;
+            if (memberType == typeof(ushort?))
+                return value is DBNull ? default(ushort?) : value;
+            if (memberType == typeof(long?))
+                return value is DBNull ? default(long?) : value;
+            if (memberType == typeof(ulong?))
+                return value is DBNull ? default(ulong?) : value;
+            if (memberType == typeof(byte?))
+                return value is DBNull ? default(byte?) : value;
+            if (memberType == typeof(sbyte?))
+                return value is DBNull ? default(sbyte?) : value;
+            if (memberType == typeof(bool?))
+                return value is DBNull ? default(bool?) : value;
+            if (memberType == typeof(float?))
+                return value is DBNull ? default(float?) : value;
+            if (memberType == typeof(double?))
+                return value is DBNull ? default(double?) : value;
+            if (memberType == typeof(decimal?))
+                return value is DBNull ? default(decimal?) : value;
+            if (memberType == typeof(char?))
+                return value is DBNull ? default(char?) : value;
+            if (memberType == typeof(Guid?))
+                return value is DBNull ? default(Guid?) : value;
+            if (memberType == typeof(DateTime?))
+                return value is DBNull ? default(DateTime?) : value;
+            if (memberType == typeof(DateTimeOffset?))
+                return value is DBNull ? default(DateTimeOffset?) : value;
+
+            if (memberType == typeof(FSharpOption<int>))
+                return value is DBNull ? FSharpOption<int>.None : FSharpOption<int>.Some((int)value);
+            if (memberType == typeof(FSharpOption<uint>))
+                return value is DBNull ? FSharpOption<uint>.None : FSharpOption<uint>.Some((uint)value);
+            if (memberType == typeof(FSharpOption<short>))
+                return value is DBNull ? FSharpOption<short>.None : FSharpOption<short>.Some((short)value);
+            if (memberType == typeof(FSharpOption<ushort>))
+                return value is DBNull ? FSharpOption<ushort>.None : FSharpOption<ushort>.Some((ushort)value);
+            if (memberType == typeof(FSharpOption<long>))
+                return value is DBNull ? FSharpOption<long>.None : FSharpOption<long>.Some((long)value);
+            if (memberType == typeof(FSharpOption<ulong>))
+                return value is DBNull ? FSharpOption<ulong>.None : FSharpOption<ulong>.Some((ulong)value);
+            if (memberType == typeof(FSharpOption<byte>))
+                return value is DBNull ? FSharpOption<byte>.None : FSharpOption<byte>.Some((byte)value);
+            if (memberType == typeof(FSharpOption<sbyte>))
+                return value is DBNull ? FSharpOption<sbyte>.None : FSharpOption<sbyte>.Some((sbyte)value);
+            if (memberType == typeof(FSharpOption<bool>))
+                return value is DBNull ? FSharpOption<bool>.None : FSharpOption<bool>.Some((bool)value);
+            if (memberType == typeof(FSharpOption<float>))
+                return value is DBNull ? FSharpOption<float>.None : FSharpOption<float>.Some((float)value);
+            if (memberType == typeof(FSharpOption<double>))
+                return value is DBNull ? FSharpOption<double>.None : FSharpOption<double>.Some((double)value);
+            if (memberType == typeof(FSharpOption<decimal>))
+                return value is DBNull ? FSharpOption<decimal>.None : FSharpOption<decimal>.Some((decimal)value);
+            if (memberType == typeof(FSharpOption<char>))
+                return value is DBNull ? FSharpOption<char>.None : FSharpOption<char>.Some((char)value);
+            if (memberType == typeof(FSharpOption<string>))
+                return value is DBNull ? FSharpOption<string>.None : FSharpOption<string>.Some((string)value);
+            if (memberType == typeof(FSharpOption<Guid>))
+                return value is DBNull ? FSharpOption<Guid>.None : FSharpOption<Guid>.Some((Guid)value);
+            if (memberType == typeof(FSharpOption<DateTime>))
+                return value is DBNull ? FSharpOption<DateTime>.None : FSharpOption<DateTime>.Some((DateTime)value);
+            if (memberType == typeof(FSharpOption<DateTimeOffset>))
+                return value is DBNull ? FSharpOption<DateTimeOffset>.None : FSharpOption<DateTimeOffset>.Some((DateTimeOffset)value);
+            if (memberType == typeof(FSharpOption<byte[]>))
+                return value is DBNull ? FSharpOption<byte[]>.None : FSharpOption<byte[]>.Some((byte[])value);
+
+            // optional values (F#)
+            if (memberType.IsGenericType
+                && !memberType.IsGenericTypeDefinition
+                && !memberType.IsGenericParameter
+                && typeof(FSharpOption<>) == memberType.GetGenericTypeDefinition())
+            {
+                if (value is DBNull)
+                    return memberType.GetProperty("None", BindingFlags.Public | BindingFlags.Static).GetGetMethod().Invoke(null, null);
+
+                var genericTypes = memberType.GetGenericArguments();
+                if (genericTypes.Length != 1)
+                    throw new Exception("Invalid fsharp option value.");
+
+                var genericType = genericTypes[0];
+                return memberType.GetMethod("Some", BindingFlags.Public | BindingFlags.Static).Invoke(null, new object[] { Resolve(genericType, value) });
+            }
+
+            // discriminated unions (F#)
+            if (FSharpType.IsUnion(memberType, none))
+            {
+                var ctor = FSharpType.GetUnionCases(memberType, none).FirstOrDefault(cinfo => cinfo.GetFields().Length == 1);
+                if (ctor == null)
+                    throw new Exception("Invalid discriminated-unions.");
+
+                var field = ctor.GetFields()[0];
+                return FSharpValue.MakeUnion(ctor, new object[] { Resolve(field.PropertyType, value) }, none);
+            }
+
+            // nullable values
+            if (memberType.IsGenericType
+                && !memberType.IsGenericTypeDefinition
+                && !memberType.IsGenericParameter
+                && typeof(Nullable<>) == memberType.GetGenericTypeDefinition())
+            {
+                return value is DBNull ? null : value;
+            }
+
+            // non nullable values
+            if (memberType.IsValueType)
+            {
+                return value is DBNull ? Activator.CreateInstance(memberType) : value;
+            }
+
+            // class values
+            if (memberType.IsClass)
+            {
+                if (value is string)
+                    return value;
+
+                return value is DBNull ? null : Activator.CreateInstance(memberType, value);
+            }
+
+            // enums
+            if (memberType.IsEnum)
+            {
+                if (value is DBNull)
+                    return memberType.GetEnumValue(0);
+
+                if (value is short s)
+                    return memberType.GetEnumValue(s);
+                if (value is int i)
+                    return memberType.GetEnumValue(i);
+                if (value is long l)
+                    return memberType.GetEnumValue(l);
+
+                if (value is ushort us)
+                    return memberType.GetEnumValue(us);
+                if (value is uint ui)
+                    return memberType.GetEnumValue(ui);
+                if (value is ulong ul)
+                    return memberType.GetEnumValue(ul);
+
+                if (value is byte b)
+                    return memberType.GetEnumValue(b);
+                if (value is sbyte sb)
+                    return memberType.GetEnumValue(sb);
+            }
+
+            throw new Exception("Could not resolve the value.");
+        }
+#endif
     }
 }
-#endif

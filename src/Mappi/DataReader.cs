@@ -45,7 +45,7 @@ namespace Mappi
             _isRead = false;
         }
 
-        public IEnumerable<T> Read<T>() where T : new()
+        public IEnumerable<T> Read<T>()
         {
             if (_isRead)
                 throw new Exception("The data has already been loaded.");

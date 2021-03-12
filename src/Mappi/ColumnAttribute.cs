@@ -8,7 +8,11 @@ namespace Mappi
     public class ColumnAttribute : Attribute
     {
         public string Name { get; }
-        public ColumnAttribute(string Name)
-            => this.Name = Name;
+        public object DefaultValue { get; }
+        public ColumnAttribute(string Name, object DefaultValue = null)
+        {
+            this.Name = Name;
+            this.DefaultValue = DefaultValue;
+        }
     }
 }

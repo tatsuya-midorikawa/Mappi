@@ -68,7 +68,7 @@ type Name = Name of string
 type Age = Age of int
 
 type Person = {
-    number : Guid
+    number : Id
     [<Column(Name = "first_name")>]
     firstName : Name
     [<Column(Name = "middle_name")>]
@@ -86,7 +86,7 @@ type Age = Age of int
 
 // DB上でnullableになっている値についてはOption型を指定することも可能です
 type Person = {
-    number : Guid
+    number : Id
     [<Column(Name = "first_name")>]
     firstName : Name
     [<Column(Name = "middle_name")>]
@@ -106,7 +106,7 @@ type Age = Age of int
 
 [<Struct>]
 type Person = {
-    number : Guid
+    number : Id
     [<Column(Name = "first_name")>]
     firstName : Name
     [<Column(Name = "middle_name")>]

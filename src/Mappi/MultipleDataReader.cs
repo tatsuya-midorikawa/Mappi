@@ -95,8 +95,10 @@ namespace Mappi
                         .GetProperties((BindingFlags.Instance | BindingFlags.Public) ^ BindingFlags.DeclaredOnly)
                         .Where(property => property.GetAttribute<IgnoreAttribute>() == null))
                     {
-                        var columnName = property.GetAttribute<ColumnAttribute>() is ColumnAttribute c ? c.Name : property.Name;
-                        var data = new PropertyCache<T>.Data { Name = columnName, Type = property.PropertyType };
+                        var column = property.GetAttribute<ColumnAttribute>();
+                        var columnName = column != null ? column.Name : property.Name;
+                        var defaultValue = column != null ? column.DefaultValue : null;
+                        var data = new PropertyCache<T>.Data { Name = columnName, Type = property.PropertyType, DefaultValue = defaultValue };
                         PropertyCache<T>.Add(data);
                         SetterCache<T>.GetOrAdd(data.Name, BuildSetter(property));
                     }
@@ -110,7 +112,10 @@ namespace Mappi
                     {
                         if (SetterCache<T>.TryGetSetter(property.Name, out Action<object, object> setter))
                         {
-                            var value = _resolver.Resolve(property.Type, _reader[property.Name]);
+                            var data = _reader[property.Name];
+                            var value = data is DBNull && property.DefaultValue != null
+                                ? property.DefaultValue
+                                : _resolver.Resolve(property.Type, data);
                             setter(instance, value);
                         }
                     }
@@ -235,6 +240,7 @@ namespace Mappi
             {
                 public Type Type { get; set; }
                 public string Name { get; set; }
+                public object DefaultValue { get; set; }
             }
 
             private static List<Data> _cache = new List<Data>();

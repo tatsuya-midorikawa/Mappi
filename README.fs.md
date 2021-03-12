@@ -16,8 +16,8 @@ Mappi は `System.Data.SqlClient.SqlConnection` の拡張メソッドとして�
 type Person = {
     number : Guid
     first_name : string
-    middle_n_ame : string
-    last_n_ame : string
+    middle_name : string
+    last_name : string
     age : int
 }
 ```

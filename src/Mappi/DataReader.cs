@@ -56,7 +56,6 @@ namespace Mappi
 
 #if NET45 || NET46 || NET472 || NET48 || NETCOREAPP3_1 || NET5_0
         public async Task<IEnumerable<T>> ReadAsync<T>(int baseCapacity = 128) 
-            where T : class
         {
             if (_isRead)
                 throw new Exception("The data has already been loaded.");

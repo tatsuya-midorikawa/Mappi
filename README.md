@@ -45,6 +45,19 @@ class Person
 }
 ```
 
+`ColumnAttribute` の `DefaultValue` プロパティを利用することでDB上にある値がnullだった場合の既定値を設定することができます。  
+
+```cs
+class Person
+{
+    [Column(Name: "name", DefaultValue: "ななしの権兵衛")]
+    public string Name { get; private set; }
+    [Column(Name: "age", DefaultValule: 0)]
+    public int Age { get; private set; }
+}
+```
+
+
 構造体についても同様の方法で宣言で可能です。
 
 ```cs
